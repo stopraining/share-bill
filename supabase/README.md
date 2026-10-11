@@ -4,6 +4,8 @@
 
 若已執行過帳本 schema，只要啟用支出雲端同步，請改執行 `expense_migration.sql`。之後重新載入 App；新增支出會寫入資料庫，首頁會讀取目前帳本的雲端支出。本機既有支出會在首次載入時嘗試上傳至目前帳本，只有上傳成功才清除舊版全域快取。
 
+已部署支出表的專案若要啟用「選擇付款人及分攤成員」，請再執行 `expense_splits_migration.sql`，建立原子化的 `create_ledger_expense` RPC。它會驗證付款人與所有分攤者屬於該帳本，並在同一個交易中新增支出和分攤資料。
+
 ## 關聯
 
 - `auth.users` 1—1 `public.users`：Auth 註冊後由 trigger 自動建立公開個人資料。
@@ -37,6 +39,8 @@
 
 建立帳本會由資料庫 trigger 自動新增 `owner` 成員列。
 
+Members 頁使用 `list_ledger_members(p_ledger_id)` RPC 讀取帳本成員的名稱、email、角色及加入時間。RPC 會先驗證呼叫者是該帳本成員，不需要開放一般使用者讀取其他使用者的 `public.users` 資料。既有資料庫請執行 `members_migration.sql` 建立此 RPC。
+
 ### `public.ledger_invitations`
 
 包含 `id`、`ledger_id`、小寫 `email`、`invited_by`、隨機 `invitation_token`、`status`、`expires_at`（預設 7 日）、`accepted_by`、`created_at`、`accepted_at`。App 目前產生可複製的邀請連結，需由邀請者自行傳送；受邀者以相同 email 註冊／登入後接受連結。
@@ -46,9 +50,9 @@
 - `public.expenses`：`ledger_id`、`title`、`amount`、`currency`、`paid_by`、`created_by`、`category`、`expense_date`、`notes`、時間戳記。
 - `public.expense_splits`：複合主鍵 `(expense_id, user_id)` 與該成員應分攤的 `amount`。
 
-兩張支出表已有以帳本成員身份為基礎的 RLS policies。App 會將新增支出寫入 `public.expenses`，並從所選帳本讀取；瀏覽器 `localStorage` 僅保留快取。首次同步會嘗試上傳舊版本機支出，成功後保留每本帳本的快取副本。
+兩張支出表已有以帳本成員身份為基礎的 RLS policies。App 會將新增支出寫入 `public.expenses`，並在同一筆資料庫交易中把每位分攤成員及金額寫入 `public.expense_splits`；讀取支出依所選帳本進行，瀏覽器 `localStorage` 僅保留快取。首次同步會嘗試上傳舊版本機支出，成功後保留每本帳本的快取副本。
 
-`public.expenses.paid_by` 記錄目前登入者的 UUID；`payer_name` 是顯示用快照（例如顯示名稱）。目前表單付款人固定為登入者，之後可以再擴充成由帳本成員選擇付款人。
+`public.expenses.paid_by` 記錄實際付款的帳本成員 UUID；`payer_name` 是顯示用名稱快照。付款人可以和建立支出的登入者不同。`public.expense_splits` 每列記錄一位分攤者及其應分金額；成員不必包含付款人。費用平均分配到小數點後兩位，若有餘數，系統會調整其中一位成員的金額，確保分攤加總等於總額。
 
 ## 權限模型
 

@@ -156,32 +156,42 @@ export const useExpenseStore = defineStore("expenses", {
     async addExpense(expense) {
       if (!this.ledgerId) throw new Error("請先建立或選擇帳本。");
       if (!supabase) throw new Error("Supabase 未設定，支出無法寫入資料庫。");
+      const splitUserIds = [...new Set(expense.splitUserIds || [])];
+      if (!expense.payerUserId) throw new Error("請選擇付款人。");
+      if (!splitUserIds.length) throw new Error("請至少選擇一位分攤成員。");
 
       const authStore = useAuthStore();
       const user = authStore.user;
       if (!user) throw new Error("登入狀態已失效，請重新登入後再試。");
 
       const now = new Date();
+      const targetLedgerId = this.ledgerId;
+      const { data: expenseId, error: createError } = await supabase.rpc(
+        "create_ledger_expense",
+        {
+          p_ledger_id: targetLedgerId,
+          p_title: expense.title.trim(),
+          p_amount: Number(expense.amount),
+          p_paid_by: expense.payerUserId,
+          p_category: expense.category || "其他",
+          p_expense_date: expense.expenseDate || now.toISOString().slice(0, 10),
+          p_notes: expense.notes || "",
+          p_split_user_ids: splitUserIds,
+        },
+      );
+      if (createError) throw createError;
+
       const { data, error } = await supabase
         .from("expenses")
-        .insert({
-          ledger_id: this.ledgerId,
-          title: expense.title.trim(),
-          amount: Number(expense.amount),
-          currency: "TWD",
-          paid_by: user.id,
-          created_by: user.id,
-          payer_name:
-            expense.payer || user.user_metadata?.display_name || user.email,
-          category: expense.category || "其他",
-          expense_date: expense.expenseDate || now.toISOString().slice(0, 10),
-          notes: expense.notes || "",
-        })
         .select(
           "id, ledger_id, title, amount, payer_name, category, expense_date, created_at",
         )
+        .eq("id", expenseId)
         .single();
       if (error) throw error;
+      if (this.ledgerId !== targetLedgerId) {
+        throw new Error("支出已儲存，但目前已切換帳本。請返回該帳本查看。");
+      }
 
       const savedExpense = {
         id: data.id,
@@ -191,6 +201,8 @@ export const useExpenseStore = defineStore("expenses", {
         payer: data.payer_name || "帳本成員",
         category: data.category,
         createdAt: data.created_at,
+        splitUserIds,
+        payerUserId: expense.payerUserId,
       };
       this.expenses.unshift(savedExpense);
       this.persistCache();

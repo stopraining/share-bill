@@ -1,10 +1,15 @@
 <script setup>
 import { HandCoins, Info } from "lucide-vue-next";
+import { useLedgerStore } from "../stores/ledger";
+
+const ledgerStore = useLedgerStore();
 </script>
 
 <template>
   <section class="page-heading">
-    <p class="eyebrow">週末小旅行</p>
+    <p class="eyebrow">
+      {{ ledgerStore.activeLedger?.name || "歡迎使用分分" }}
+    </p>
     <h1>結算明細</h1>
   </section>
 
