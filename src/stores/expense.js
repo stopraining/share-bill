@@ -66,7 +66,7 @@ export const useExpenseStore = defineStore("expenses", {
         const { data, error } = await supabase
           .from("expenses")
           .select(
-            "id, ledger_id, title, amount, payer_name, category, expense_date, created_at",
+            "id, ledger_id, title, amount, paid_by, payer_name, category, expense_date, created_at, expense_splits(user_id, amount)",
           )
           .eq("ledger_id", targetLedgerId)
           .order("expense_date", { ascending: false })
@@ -79,9 +79,15 @@ export const useExpenseStore = defineStore("expenses", {
           ledgerId: row.ledger_id,
           title: row.title,
           amount: Number(row.amount),
+          payerUserId: row.paid_by,
           payer: row.payer_name || "帳本成員",
           category: row.category,
           createdAt: row.created_at,
+          expenseDate: row.expense_date,
+          splits: (row.expense_splits || []).map((split) => ({
+            userId: split.user_id,
+            amount: Number(split.amount),
+          })),
         }));
         this.persistCache();
         this.loadedLedgerId = targetLedgerId;
@@ -184,7 +190,7 @@ export const useExpenseStore = defineStore("expenses", {
       const { data, error } = await supabase
         .from("expenses")
         .select(
-          "id, ledger_id, title, amount, payer_name, category, expense_date, created_at",
+          "id, ledger_id, title, amount, paid_by, payer_name, category, expense_date, created_at, expense_splits(user_id, amount)",
         )
         .eq("id", expenseId)
         .single();
@@ -199,10 +205,14 @@ export const useExpenseStore = defineStore("expenses", {
         title: data.title,
         amount: Number(data.amount),
         payer: data.payer_name || "帳本成員",
+        payerUserId: data.paid_by,
         category: data.category,
         createdAt: data.created_at,
-        splitUserIds,
-        payerUserId: expense.payerUserId,
+        expenseDate: data.expense_date,
+        splits: (data.expense_splits || []).map((split) => ({
+          userId: split.user_id,
+          amount: Number(split.amount),
+        })),
       };
       this.expenses.unshift(savedExpense);
       this.persistCache();

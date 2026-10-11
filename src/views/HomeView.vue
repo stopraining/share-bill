@@ -73,9 +73,14 @@ const formatDate = (value) =>
   <section>
     <div class="section-row">
       <h2>最近支出</h2>
-      <RouterLink class="section-link" to="/expenses/new"
-        >記一筆 <ArrowRight :size="13"
-      /></RouterLink>
+      <div class="home-expense-links">
+        <RouterLink class="section-link" to="/expenses"
+          >全部 <ArrowRight :size="13"
+        /></RouterLink>
+        <RouterLink class="section-link" to="/expenses/new"
+          >記一筆 <Plus :size="13"
+        /></RouterLink>
+      </div>
     </div>
     <p v-if="expenseStore.error" class="expense-error" role="alert">
       {{ expenseStore.error }}
