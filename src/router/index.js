@@ -23,6 +23,11 @@ const router = createRouter({
       name: "members",
       component: () => import("../views/MembersView.vue"),
     },
+    {
+      path: "/ledgers",
+      name: "ledgers",
+      component: () => import("../views/LedgersView.vue"),
+    },
     { path: "/:pathMatch(.*)*", redirect: "/" },
   ],
 });

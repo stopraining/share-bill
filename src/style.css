@@ -58,7 +58,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 22px 22px 14px;
+  padding: 18px 14px 14px;
 }
 .brand {
   display: flex;
@@ -93,6 +93,25 @@ button {
   border: 1px solid var(--line);
   border-radius: 50%;
   background: #fff;
+}
+.ledger-switcher {
+  display: flex;
+  min-width: 0;
+  max-width: 130px;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--green);
+  background: #fff;
+  font-size: 11px;
+  font-weight: 650;
+}
+.ledger-switcher span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .app-main {
   min-height: calc(100vh - 157px);
@@ -180,6 +199,9 @@ h2 {
   color: var(--green);
   font-size: 12px;
   font-weight: 650;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .quick-actions {
   display: grid;
@@ -201,6 +223,9 @@ h2 {
   display: flex;
   width: 40px;
   height: 40px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
   border-radius: 14px;
   color: var(--green);
   background: var(--green-soft);
@@ -215,12 +240,6 @@ h2 {
   color: var(--muted);
   font-size: 10px;
 }
-.quick-action button {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
 .expense-list {
   display: grid;
   gap: 3px;
@@ -410,6 +429,178 @@ h2 {
   background: #f1f6ef;
   font-size: 12px;
   line-height: 1.55;
+}
+.expense-error {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 13px;
+  color: #a23d30;
+  background: #fff0ed;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ledger-home-notice {
+  align-items: center;
+  color: var(--green);
+  text-decoration: none;
+}
+.ledger-home-notice svg:last-child {
+  flex: none;
+  margin-left: auto;
+}
+.ledger-actions {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 26px;
+}
+.ledger-action {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: #fff;
+  text-align: left;
+}
+.ledger-action > span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+.ledger-action strong,
+.ledger-action small {
+  display: block;
+}
+.ledger-action strong {
+  font-size: 13px;
+}
+.ledger-action small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.ledger-action > svg:last-child {
+  color: #9aa095;
+}
+.ledger-action-icon,
+.ledger-avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--green);
+  background: var(--green-soft);
+}
+.ledger-form {
+  margin-bottom: 13px;
+}
+.ledger-form h2 {
+  margin-bottom: 17px;
+}
+.ledger-section-heading {
+  margin-top: 0;
+}
+.ledger-section-heading svg {
+  color: var(--green);
+}
+.ledger-feedback {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: 13px;
+  color: #27664b;
+  background: #edf6ed;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ledger-feedback.error {
+  color: #a23d30;
+  background: #fff0ed;
+}
+.ledger-list {
+  display: grid;
+  gap: 9px;
+}
+.ledger-card {
+  display: flex;
+  width: 100%;
+  min-height: 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: #fff;
+  text-align: left;
+}
+.ledger-card.active {
+  border-color: #bad2c1;
+  background: #f8fbf7;
+}
+.ledger-card-copy {
+  min-width: 0;
+  flex: 1;
+}
+.ledger-card-copy strong,
+.ledger-card-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-card-copy strong {
+  font-size: 13px;
+}
+.ledger-card-copy small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.ledger-count {
+  display: grid;
+  min-width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--green);
+  background: var(--green-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+.ledger-chevron {
+  color: #9aa095;
+}
+.invite-link-box {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+.invite-link-box label {
+  color: #60675e;
+  font-size: 11px;
+  font-weight: 650;
+}
+.invite-copy-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.invite-copy-row input {
+  min-width: 0;
+  min-height: 42px;
+  flex: 1;
+  padding: 0 10px;
+  border: 1px solid #e8ece5;
+  border-radius: 11px;
+  background: #fbfcfa;
+  font-size: 10px;
+}
+.invite-copy-row .icon-button {
+  flex: none;
 }
 
 @media (min-width: 481px) {

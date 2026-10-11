@@ -48,7 +48,7 @@ export const useAuthStore = defineStore("auth", {
         password,
         options: {
           data: { display_name: displayName },
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: `${window.location.origin}${window.location.pathname}${window.location.search}`,
         },
       });
       if (error) throw error;
