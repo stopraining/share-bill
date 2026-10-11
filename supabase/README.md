@@ -6,6 +6,8 @@
 
 已部署支出表的專案若要啟用「選擇付款人及分攤成員」，請再執行 `expense_splits_migration.sql`，建立原子化的 `create_ledger_expense` RPC。它會驗證付款人與所有分攤者屬於該帳本，並在同一個交易中新增支出和分攤資料。
 
+若要啟用費用編輯，還需要執行 `expense_edit_migration.sql`。它建立 `update_ledger_expense` RPC，在同一交易中更新費用及分攤資料；只有建立該費用的使用者可以編輯或刪除。資料表的 RLS 會拒絕其他成員的直接編輯/刪除請求。
+
 ## 關聯
 
 - `auth.users` 1—1 `public.users`：Auth 註冊後由 trigger 自動建立公開個人資料。

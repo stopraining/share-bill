@@ -66,7 +66,7 @@ export const useExpenseStore = defineStore("expenses", {
         const { data, error } = await supabase
           .from("expenses")
           .select(
-            "id, ledger_id, title, amount, paid_by, payer_name, category, expense_date, created_at, expense_splits(user_id, amount)",
+            "id, ledger_id, title, amount, paid_by, payer_name, created_by, category, expense_date, notes, created_at, expense_splits(user_id, amount)",
           )
           .eq("ledger_id", targetLedgerId)
           .order("expense_date", { ascending: false })
@@ -81,9 +81,11 @@ export const useExpenseStore = defineStore("expenses", {
           amount: Number(row.amount),
           payerUserId: row.paid_by,
           payer: row.payer_name || "帳本成員",
+          createdBy: row.created_by,
           category: row.category,
           createdAt: row.created_at,
           expenseDate: row.expense_date,
+          notes: row.notes || "",
           splits: (row.expense_splits || []).map((split) => ({
             userId: split.user_id,
             amount: Number(split.amount),
@@ -190,7 +192,7 @@ export const useExpenseStore = defineStore("expenses", {
       const { data, error } = await supabase
         .from("expenses")
         .select(
-          "id, ledger_id, title, amount, paid_by, payer_name, category, expense_date, created_at, expense_splits(user_id, amount)",
+          "id, ledger_id, title, amount, paid_by, payer_name, created_by, category, expense_date, notes, created_at, expense_splits(user_id, amount)",
         )
         .eq("id", expenseId)
         .single();
@@ -206,9 +208,11 @@ export const useExpenseStore = defineStore("expenses", {
         amount: Number(data.amount),
         payer: data.payer_name || "帳本成員",
         payerUserId: data.paid_by,
+        createdBy: data.created_by,
         category: data.category,
         createdAt: data.created_at,
         expenseDate: data.expense_date,
+        notes: data.notes || "",
         splits: (data.expense_splits || []).map((split) => ({
           userId: split.user_id,
           amount: Number(split.amount),
@@ -217,6 +221,69 @@ export const useExpenseStore = defineStore("expenses", {
       this.expenses.unshift(savedExpense);
       this.persistCache();
       return savedExpense;
+    },
+    async updateExpense(expenseId, expense) {
+      if (!this.ledgerId) throw new Error("請先選擇帳本。");
+      if (!supabase) throw new Error("Supabase 未設定，費用無法更新。");
+      const authStore = useAuthStore();
+      if (!authStore.user)
+        throw new Error("登入狀態已失效，請重新登入後再試。");
+
+      const targetLedgerId = this.ledgerId;
+      const splitUserIds = [...new Set(expense.splitUserIds || [])];
+      const { data: updatedId, error: updateError } = await supabase.rpc(
+        "update_ledger_expense",
+        {
+          p_expense_id: expenseId,
+          p_title: expense.title.trim(),
+          p_amount: Number(expense.amount),
+          p_paid_by: expense.payerUserId,
+          p_category: expense.category || "其他",
+          p_expense_date: expense.expenseDate,
+          p_notes: expense.notes || "",
+          p_split_user_ids: splitUserIds,
+        },
+      );
+      if (updateError) throw updateError;
+      if (updatedId !== expenseId)
+        throw new Error("資料庫回傳的費用識別碼不符。");
+
+      const { data, error } = await supabase
+        .from("expenses")
+        .select(
+          "id, ledger_id, title, amount, paid_by, payer_name, created_by, category, expense_date, notes, created_at, expense_splits(user_id, amount)",
+        )
+        .eq("id", expenseId)
+        .single();
+      if (error) throw error;
+      if (this.ledgerId !== targetLedgerId) {
+        throw new Error("費用已更新，但目前已切換帳本。請返回原帳本查看。");
+      }
+
+      const updatedExpense = {
+        id: data.id,
+        ledgerId: data.ledger_id,
+        title: data.title,
+        amount: Number(data.amount),
+        payer: data.payer_name || "帳本成員",
+        payerUserId: data.paid_by,
+        createdBy: data.created_by,
+        category: data.category,
+        createdAt: data.created_at,
+        expenseDate: data.expense_date,
+        notes: data.notes || "",
+        splits: (data.expense_splits || []).map((split) => ({
+          userId: split.user_id,
+          amount: Number(split.amount),
+        })),
+      };
+      const expenseIndex = this.expenses.findIndex(
+        (item) => item.id === expenseId,
+      );
+      if (expenseIndex !== -1)
+        this.expenses.splice(expenseIndex, 1, updatedExpense);
+      this.persistCache();
+      return updatedExpense;
     },
     async deleteExpense(expenseId) {
       if (!supabase) throw new Error("Supabase 未設定，無法刪除支出。");
