@@ -8,6 +8,8 @@
 
 若要啟用費用編輯，還需要執行 `expense_edit_migration.sql`。它建立 `update_ledger_expense` RPC，在同一交易中更新費用及分攤資料；只有建立該費用的使用者可以編輯或刪除。資料表的 RLS 會拒絕其他成員的直接編輯/刪除請求。
 
+若要啟用結算批次、匯款/收款確認及歷史紀錄，請在帳本、成員、費用和分攤資料表 migration 都已執行後，再執行 `settlements_migration.sql`。開始結算時，系統會將所有尚未進入前一輪的已分攤費用封存至一個批次，並建立精簡轉帳建議。付款人標記已匯款後，由收款人確認；所有轉帳確認後批次自動完成。批次內的費用列會由 trigger 保護，不能再編輯或刪除，以免破壞歷史；若需修正，請新增一筆調整費用，納入下一輪。
+
 ## 關聯
 
 - `auth.users` 1—1 `public.users`：Auth 註冊後由 trigger 自動建立公開個人資料。
@@ -51,6 +53,9 @@ Members 頁使用 `list_ledger_members(p_ledger_id)` RPC 讀取帳本成員的�
 
 - `public.expenses`：`ledger_id`、`title`、`amount`、`currency`、`paid_by`、`created_by`、`category`、`expense_date`、`notes`、時間戳記。
 - `public.expense_splits`：複合主鍵 `(expense_id, user_id)` 與該成員應分攤的 `amount`。
+- `public.settlements`：帳本、開始者、狀態、封存總額、費用數量與完成時間。
+- `public.settlement_expenses`：結算批次與費用的固定對照；`expense_id` 全域唯一，避免一筆費用被重複結算。
+- `public.settlement_transfers`：該輪精簡轉帳的 payer、payee、金額及 `pending` / `paid` / `confirmed` 狀態和確認時間。
 
 兩張支出表已有以帳本成員身份為基礎的 RLS policies。App 會將新增支出寫入 `public.expenses`，並在同一筆資料庫交易中把每位分攤成員及金額寫入 `public.expense_splits`；讀取支出依所選帳本進行，瀏覽器 `localStorage` 僅保留快取。首次同步會嘗試上傳舊版本機支出，成功後保留每本帳本的快取副本。
 

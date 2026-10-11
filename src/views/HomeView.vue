@@ -7,21 +7,153 @@ import {
   Plus,
   ReceiptText,
 } from "lucide-vue-next";
-import { computed } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { useExpenseStore } from "../stores/expense";
 import { useLedgerStore } from "../stores/ledger";
+import { supabase } from "../lib/supabase";
 
 const expenseStore = useExpenseStore();
 const ledgerStore = useLedgerStore();
-const currency = new Intl.NumberFormat("zh-TW", {
-  style: "currency",
-  currency: "TWD",
-  maximumFractionDigits: 0,
-});
-const formattedTotal = computed(() =>
-  currency.format(expenseStore.totalAmount),
+const roundSummary = ref({ amount: 0, count: 0, isActive: false });
+const roundLoading = ref(false);
+const roundSummaryNote = ref("");
+let summaryRequestId = 0;
+
+const currency = computed(
+  () =>
+    new Intl.NumberFormat("zh-TW", {
+      style: "currency",
+      currency: ledgerStore.activeLedger?.currency || "TWD",
+      maximumFractionDigits: 2,
+    }),
 );
+const formattedTotal = computed(() =>
+  currency.value.format(roundSummary.value.amount),
+);
+const roundLabel = computed(() =>
+  roundSummary.value.isActive ? "本輪結算金額" : "待結算分帳金額",
+);
+const expenseCountLabel = computed(() =>
+  roundSummary.value.isActive ? "本輪已封存" : "等待開始結算",
+);
+
+async function loadRoundSummary() {
+  const ledgerId = ledgerStore.activeLedgerId;
+  const requestId = ++summaryRequestId;
+  roundSummary.value = { amount: 0, count: 0, isActive: false };
+  roundSummaryNote.value = "";
+
+  if (!ledgerId) {
+    roundLoading.value = false;
+    return;
+  }
+
+  roundLoading.value = true;
+  try {
+    if (
+      expenseStore.ledgerId !== ledgerId ||
+      expenseStore.loadedLedgerId !== ledgerId
+    ) {
+      await expenseStore.setLedger(ledgerId);
+    }
+    if (requestId !== summaryRequestId) return;
+
+    if (!supabase) {
+      const eligible = expenseStore.expenses.filter(
+        (expense) => expense.splits?.length,
+      );
+      roundSummary.value = {
+        amount: eligible.reduce((sum, expense) => sum + expense.amount, 0),
+        count: eligible.length,
+        isActive: false,
+      };
+      roundSummaryNote.value = "目前以本機已分攤費用計算。";
+      return;
+    }
+
+    const { data: batches, error: batchError } = await supabase
+      .from("settlements")
+      .select("id, total_amount, expense_count, status")
+      .eq("ledger_id", ledgerId)
+      .order("started_at", { ascending: false });
+    if (batchError) throw batchError;
+    if (requestId !== summaryRequestId) return;
+
+    const activeBatch = (batches || []).find(
+      (batch) => batch.status === "active",
+    );
+    if (activeBatch) {
+      roundSummary.value = {
+        amount: Number(activeBatch.total_amount),
+        count: activeBatch.expense_count,
+        isActive: true,
+      };
+      const settledBatchIds = (batches || []).map((batch) => batch.id);
+      if (settledBatchIds.length) {
+        const { data: settledExpenses, error: settledError } = await supabase
+          .from("settlement_expenses")
+          .select("expense_id")
+          .in("settlement_id", settledBatchIds);
+        if (settledError) throw settledError;
+        const settledIds = new Set(
+          (settledExpenses || []).map((row) => row.expense_id),
+        );
+        const nextCount = expenseStore.expenses.filter(
+          (expense) => expense.splits?.length && !settledIds.has(expense.id),
+        ).length;
+        if (nextCount)
+          roundSummaryNote.value = `${nextCount} 筆新費用將於本輪完成後列入下一輪。`;
+      }
+      return;
+    }
+
+    const settledBatchIds = (batches || []).map((batch) => batch.id);
+    let settledIds = new Set();
+    if (settledBatchIds.length) {
+      const { data: settledExpenses, error: settledError } = await supabase
+        .from("settlement_expenses")
+        .select("expense_id")
+        .in("settlement_id", settledBatchIds);
+      if (settledError) throw settledError;
+      settledIds = new Set(
+        (settledExpenses || []).map((row) => row.expense_id),
+      );
+    }
+
+    const eligible = expenseStore.expenses.filter(
+      (expense) => expense.splits?.length && !settledIds.has(expense.id),
+    );
+    roundSummary.value = {
+      amount: eligible.reduce((sum, expense) => sum + expense.amount, 0),
+      count: eligible.length,
+      isActive: false,
+    };
+    if (expenseStore.expenses.some((expense) => !expense.splits?.length)) {
+      roundSummaryNote.value = "沒有分攤對象的舊費用不會計入本輪金額。";
+    }
+  } catch (error) {
+    if (requestId === summaryRequestId) {
+      const eligible = expenseStore.expenses.filter(
+        (expense) => expense.splits?.length,
+      );
+      roundSummary.value = {
+        amount: eligible.reduce((sum, expense) => sum + expense.amount, 0),
+        count: eligible.length,
+        isActive: false,
+      };
+      roundSummaryNote.value = "無法讀取結算批次，暫以所有已分攤費用估算。";
+    }
+  } finally {
+    if (requestId === summaryRequestId) roundLoading.value = false;
+  }
+}
+
+watch(() => ledgerStore.activeLedgerId, loadRoundSummary);
+watch(() => expenseStore.totalAmount, loadRoundSummary);
+
+onMounted(loadRoundSummary);
+
 const recentExpenses = computed(() => expenseStore.recentExpenses.slice(0, 4));
 const formatDate = (value) =>
   new Date(value).toLocaleDateString("zh-TW", {
@@ -48,16 +180,27 @@ const formatDate = (value) =>
     />建立一個新帳本，或使用朋友的邀請連結加入帳本。<ArrowRight :size="16" />
   </RouterLink>
 
-  <section v-else class="balance-card" aria-label="群組支出總覽">
-    <div class="balance-label"><CircleDollarSign :size="17" /> 總支出</div>
-    <p class="balance-amount">{{ formattedTotal }}</p>
+  <section v-else class="balance-card" aria-label="本輪分帳金額">
+    <div class="balance-label">
+      <CircleDollarSign :size="17" /> {{ roundLabel }}
+    </div>
+    <p class="balance-amount">
+      {{ roundLoading ? "計算中…" : formattedTotal }}
+    </p>
     <div class="balance-foot">
       <span
-        >已記錄 <strong>{{ expenseStore.expenses.length }}</strong> 筆支出</span
+        >{{ expenseCountLabel }}
+        <strong>{{ roundSummary.count }}</strong> 筆費用</span
       >
-      <span>一起分帳更輕鬆</span>
+      <span>{{ roundSummary.isActive ? "結算進行中" : "尚未開始結算" }}</span>
     </div>
   </section>
+  <p
+    v-if="roundSummaryNote && ledgerStore.activeLedger"
+    class="round-summary-note"
+  >
+    {{ roundSummaryNote }}
+  </p>
 
   <div v-if="ledgerStore.activeLedger" class="quick-actions">
     <RouterLink class="quick-action" to="/expenses/new">
