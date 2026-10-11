@@ -424,9 +424,5 @@ onMounted(loadExpensesAndMembers);
         </form>
       </details>
     </div>
-
-    <RouterLink class="primary-button expense-add-button" to="/expenses/new">
-      <ArrowLeft :size="17" />新增一筆費用
-    </RouterLink>
   </template>
 </template>
