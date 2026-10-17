@@ -64,15 +64,22 @@ export const useAuthStore = defineStore("auth", () => {
     if (normalizedName.length > 40)
       throw new Error("使用者名稱不可超過 40 個字。");
 
-    const previousName = user.value.user_metadata?.display_name || "";
-    const { data: profile, error: profileError } = await supabase
+    const { data: previousProfile, error: readError } = await supabase
       .from("users")
-      .update({ display_name: normalizedName })
+      .select("display_name, avatar_emoji")
       .eq("id", user.value.id)
-      .select("id")
       .maybeSingle();
+    if (readError) throw readError;
+    if (!previousProfile) throw new Error("找不到使用者資料，無法更新名稱。");
+
+    const { error: profileError } = await supabase
+      .from("users")
+      .update({
+        display_name: normalizedName,
+        avatar_emoji: avatarEmoji || "",
+      })
+      .eq("id", user.value.id);
     if (profileError) throw profileError;
-    if (!profile) throw new Error("找不到使用者資料，無法更新名稱。");
 
     const { data, error } = await supabase.auth.updateUser({
       data: {
@@ -83,7 +90,10 @@ export const useAuthStore = defineStore("auth", () => {
     if (error) {
       await supabase
         .from("users")
-        .update({ display_name: previousName })
+        .update({
+          display_name: previousProfile.display_name,
+          avatar_emoji: previousProfile.avatar_emoji || "",
+        })
         .eq("id", user.value.id);
       throw error;
     }

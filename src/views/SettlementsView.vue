@@ -58,6 +58,12 @@ const memberName = (userId) => {
   const member = memberMap.value.get(userId);
   return member?.display_name || member?.email?.split("@")[0] || "帳本成員";
 };
+const memberAvatar = (userId) => {
+  const member = memberMap.value.get(userId);
+  return (
+    member?.avatar_emoji || memberName(userId).trim().slice(0, 1).toUpperCase()
+  );
+};
 const expenses = computed(() => expenseStore.recentExpenses);
 const pendingExpenses = computed(() =>
   expenses.value.filter(
@@ -292,6 +298,13 @@ const formatDate = (value) =>
   });
 
 watch(() => ledgerStore.activeLedgerId, loadLedgerData);
+watch(
+  [
+    () => authStore.user?.user_metadata?.display_name,
+    () => authStore.user?.user_metadata?.avatar_emoji,
+  ],
+  loadLedgerData,
+);
 onMounted(loadLedgerData);
 </script>
 
@@ -412,8 +425,8 @@ onMounted(loadLedgerData);
         >
           <div class="settlement-transfer-people">
             <span class="transfer-person debtor"
-              ><span class="transfer-avatar">{{
-                memberName(transfer.payer_id).slice(0, 1).toUpperCase()
+              ><span class="transfer-avatar" aria-hidden="true">{{
+                memberAvatar(transfer.payer_id)
               }}</span
               ><strong>{{ memberName(transfer.payer_id) }}</strong></span
             >
@@ -422,8 +435,8 @@ onMounted(loadLedgerData);
               ><ArrowRight :size="16"
             /></span>
             <span class="transfer-person creditor"
-              ><span class="transfer-avatar">{{
-                memberName(transfer.payee_id).slice(0, 1).toUpperCase()
+              ><span class="transfer-avatar" aria-hidden="true">{{
+                memberAvatar(transfer.payee_id)
               }}</span
               ><strong>{{ memberName(transfer.payee_id) }}</strong></span
             >
@@ -516,8 +529,8 @@ onMounted(loadLedgerData);
           class="transfer-card"
         >
           <span class="transfer-person debtor"
-            ><span class="transfer-avatar">{{
-              memberName(transfer.from.user_id).slice(0, 1).toUpperCase()
+            ><span class="transfer-avatar" aria-hidden="true">{{
+              memberAvatar(transfer.from.user_id)
             }}</span
             ><strong>{{ memberName(transfer.from.user_id) }}</strong></span
           >
@@ -526,8 +539,8 @@ onMounted(loadLedgerData);
             ><ArrowRight :size="17"
           /></span>
           <span class="transfer-person creditor"
-            ><span class="transfer-avatar">{{
-              memberName(transfer.to.user_id).slice(0, 1).toUpperCase()
+            ><span class="transfer-avatar" aria-hidden="true">{{
+              memberAvatar(transfer.to.user_id)
             }}</span
             ><strong>{{ memberName(transfer.to.user_id) }}</strong></span
           >
@@ -567,8 +580,8 @@ onMounted(loadLedgerData);
           :key="member.user_id"
           class="settlement-balance-row"
         >
-          <span class="transfer-avatar">{{
-            memberName(member.user_id).slice(0, 1).toUpperCase()
+          <span class="transfer-avatar" aria-hidden="true">{{
+            memberAvatar(member.user_id)
           }}</span>
           <span class="settlement-balance-name"
             ><strong>{{ memberName(member.user_id) }}</strong

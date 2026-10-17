@@ -9,16 +9,20 @@ import {
 } from "lucide-vue-next";
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
+import { useAuthStore } from "../stores/auth";
 import { useExpenseStore } from "../stores/expense";
 import { useLedgerStore } from "../stores/ledger";
 import { supabase } from "../lib/supabase";
 
 const expenseStore = useExpenseStore();
 const ledgerStore = useLedgerStore();
+const authStore = useAuthStore();
 const roundSummary = ref({ amount: 0, count: 0, isActive: false });
 const roundLoading = ref(false);
 const roundSummaryNote = ref("");
+const members = ref([]);
 let summaryRequestId = 0;
+let memberRequestId = 0;
 
 const currency = computed(
   () =>
@@ -37,6 +41,30 @@ const roundLabel = computed(() =>
 const expenseCountLabel = computed(() =>
   roundSummary.value.isActive ? "本輪已封存" : "等待開始結算",
 );
+const memberMap = computed(
+  () => new Map(members.value.map((member) => [member.user_id, member])),
+);
+
+function payerName(expense) {
+  const member = memberMap.value.get(expense.payerUserId);
+  return (
+    member?.display_name ||
+    member?.email?.split("@")[0] ||
+    expense.payer ||
+    "帳本成員"
+  );
+}
+
+async function loadMembers(ledgerId) {
+  const requestId = ++memberRequestId;
+  members.value = [];
+  if (!ledgerId || !supabase) return;
+
+  const { data, error } = await supabase.rpc("list_ledger_members", {
+    p_ledger_id: ledgerId,
+  });
+  if (!error && requestId === memberRequestId) members.value = data || [];
+}
 
 async function loadRoundSummary() {
   const ledgerId = ledgerStore.activeLedgerId;
@@ -150,11 +178,19 @@ async function loadRoundSummary() {
 }
 
 watch(() => ledgerStore.activeLedgerId, loadRoundSummary);
+watch(() => ledgerStore.activeLedgerId, loadMembers, { immediate: true });
+watch(
+  [
+    () => authStore.user?.user_metadata?.display_name,
+    () => authStore.user?.user_metadata?.avatar_emoji,
+  ],
+  () => loadMembers(ledgerStore.activeLedgerId),
+);
 watch(() => expenseStore.totalAmount, loadRoundSummary);
 
 onMounted(loadRoundSummary);
 
-const recentExpenses = computed(() => expenseStore.recentExpenses.slice(0, 4));
+const recentExpenses = computed(() => expenseStore.recentExpenses.slice(0, 5));
 const formatDate = (value) =>
   new Date(value).toLocaleDateString("zh-TW", {
     month: "numeric",
@@ -241,7 +277,7 @@ const formatDate = (value) =>
         <div class="expense-info">
           <strong>{{ expense.title }}</strong>
           <span
-            >{{ expense.payer }} 付款・{{ expense.category }}・{{
+            >{{ payerName(expense) }} 付款・{{ expense.category }}・{{
               formatDate(expense.createdAt)
             }}</span
           >

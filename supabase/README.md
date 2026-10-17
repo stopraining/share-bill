@@ -20,6 +20,17 @@
 
 ## 欄位規劃
 
+### `public.users`
+
+| 欄位           | 型別   | 說明                                   |
+| -------------- | ------ | -------------------------------------- |
+| `id`           | `uuid` | 對應 Supabase Auth 使用者 ID           |
+| `email`        | `text` | 登入電子郵件                           |
+| `display_name` | `text` | 顯示名稱                               |
+| `avatar_emoji` | `text` | 自選 Emoji；空字串代表使用顯示名稱首字 |
+
+使用者名稱和 Emoji 由同一帳號個人資料保存；Emoji 透過成員 RPC 僅分享給同帳本成員。
+
 ### `public.ledgers`
 
 | 欄位                       | 型別          | 說明                           |
@@ -43,7 +54,7 @@
 
 建立帳本會由資料庫 trigger 自動新增 `owner` 成員列。
 
-Members 頁使用 `list_ledger_members(p_ledger_id)` RPC 讀取帳本成員的名稱、email、角色及加入時間。RPC 會先驗證呼叫者是該帳本成員，不需要開放一般使用者讀取其他使用者的 `public.users` 資料。既有資料庫請執行 `members_migration.sql` 建立此 RPC。
+成員清單、側邊欄及結算頁使用 `list_ledger_members(p_ledger_id)` RPC 讀取帳本成員的名稱、Emoji 頭像、email、角色及加入時間。RPC 會先驗證呼叫者是該帳本成員，不需要開放一般使用者讀取其他使用者的 `public.users` 資料。既有資料庫請重新執行 `members_migration.sql`，加入 `avatar_emoji` 欄位並更新 RPC 回傳欄位；使用者可透過 RLS 更新自己的名稱和 Emoji 頭像。清除 Emoji 後，各處會退回顯示名稱首字。
 
 ### `public.ledger_invitations`
 

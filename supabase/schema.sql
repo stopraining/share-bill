@@ -4,8 +4,19 @@ create table if not exists public.users (
   id uuid primary key references auth.users (id) on delete cascade,
   email text unique not null,
   display_name text not null default '',
+  avatar_emoji text not null default '',
   created_at timestamptz not null default now()
 );
+
+alter table public.users
+  add column if not exists avatar_emoji text not null default '';
+
+update public.users u
+set avatar_emoji = coalesce(a.raw_user_meta_data ->> 'avatar_emoji', '')
+from auth.users a
+where a.id = u.id
+  and u.avatar_emoji = ''
+  and coalesce(a.raw_user_meta_data ->> 'avatar_emoji', '') <> '';
 
 alter table public.users enable row level security;
 
@@ -21,6 +32,8 @@ create policy "Users can update their own profile"
   to authenticated
   using ((select auth.uid()) = id)
   with check ((select auth.uid()) = id);
+
+grant select, update on public.users to authenticated;
 
 create or replace function public.handle_new_auth_user()
 returns trigger
@@ -115,10 +128,12 @@ as $$
   );
 $$;
 
-create or replace function public.list_ledger_members(p_ledger_id uuid)
+drop function if exists public.list_ledger_members(uuid);
+create function public.list_ledger_members(p_ledger_id uuid)
 returns table (
   user_id uuid,
   display_name text,
+  avatar_emoji text,
   email text,
   role text,
   joined_at timestamptz
@@ -137,7 +152,7 @@ begin
   end if;
 
   return query
-  select lm.user_id, u.display_name, u.email, lm.role, lm.joined_at
+  select lm.user_id, u.display_name, u.avatar_emoji, u.email, lm.role, lm.joined_at
   from public.ledger_members lm
   join public.users u on u.id = lm.user_id
   where lm.ledger_id = p_ledger_id

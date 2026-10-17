@@ -1,9 +1,23 @@
 -- Run in Supabase Dashboard → SQL Editor to enable listing all members
 -- of the currently selected ledger without exposing users outside that ledger.
-create or replace function public.list_ledger_members(p_ledger_id uuid)
+alter table public.users
+  add column if not exists avatar_emoji text not null default '';
+
+update public.users u
+set avatar_emoji = coalesce(a.raw_user_meta_data ->> 'avatar_emoji', '')
+from auth.users a
+where a.id = u.id
+  and u.avatar_emoji = ''
+  and coalesce(a.raw_user_meta_data ->> 'avatar_emoji', '') <> '';
+
+grant select, update on public.users to authenticated;
+
+drop function if exists public.list_ledger_members(uuid);
+create function public.list_ledger_members(p_ledger_id uuid)
 returns table (
   user_id uuid,
   display_name text,
+  avatar_emoji text,
   email text,
   role text,
   joined_at timestamptz
@@ -22,7 +36,7 @@ begin
   end if;
 
   return query
-  select lm.user_id, u.display_name, u.email, lm.role, lm.joined_at
+  select lm.user_id, u.display_name, u.avatar_emoji, u.email, lm.role, lm.joined_at
   from public.ledger_members lm
   join public.users u on u.id = lm.user_id
   where lm.ledger_id = p_ledger_id

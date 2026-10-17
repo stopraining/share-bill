@@ -169,6 +169,13 @@ async function loadExpensesAndMembers() {
 }
 
 watch(() => ledgerStore.activeLedgerId, loadExpensesAndMembers);
+watch(
+  [
+    () => authStore.user?.user_metadata?.display_name,
+    () => authStore.user?.user_metadata?.avatar_emoji,
+  ],
+  loadExpensesAndMembers,
+);
 onMounted(loadExpensesAndMembers);
 </script>
 

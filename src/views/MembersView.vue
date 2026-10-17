@@ -22,6 +22,7 @@ const roleName = (role) =>
 
 const memberInitial = (member) =>
   (member.display_name || member.email || "?").trim().slice(0, 1).toUpperCase();
+const memberAvatar = (member) => member.avatar_emoji || memberInitial(member);
 
 const formatJoinedDate = (value) =>
   new Date(value).toLocaleDateString("zh-TW", {
@@ -58,6 +59,13 @@ async function loadMembers() {
 }
 
 watch(() => ledgerStore.activeLedgerId, loadMembers);
+watch(
+  [
+    () => authStore.user?.user_metadata?.display_name,
+    () => authStore.user?.user_metadata?.avatar_emoji,
+  ],
+  loadMembers,
+);
 
 onMounted(async () => {
   if (!ledgerStore.ledgers.length) await ledgerStore.fetchLedgers();
@@ -123,7 +131,7 @@ onMounted(async () => {
         class="member-row"
       >
         <span class="avatar member-avatar" aria-hidden="true">{{
-          memberInitial(member)
+          memberAvatar(member)
         }}</span>
         <div class="member-meta">
           <strong>{{
@@ -215,7 +223,7 @@ onMounted(async () => {
 .member-avatar {
   color: #27664b;
   background: #e8f1e9;
-  font-size: 15px;
+  font-size: 19px;
   font-weight: 700;
 }
 

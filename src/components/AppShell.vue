@@ -6,6 +6,7 @@ import {
   HandCoins,
   Menu,
   LogOut,
+  Pencil,
   UsersRound,
   X,
   ReceiptText,
@@ -26,6 +27,25 @@ const drawerMembers = ref([]);
 const drawerMembersLoading = ref(false);
 const drawerMembersError = ref("");
 let drawerMemberRequestId = 0;
+const isProfileEditorOpen = ref(false);
+const profileName = ref("");
+const profileAvatarEmoji = ref("");
+const isSavingProfile = ref(false);
+const profileError = ref("");
+const avatarChoices = [
+  "😀",
+  "😎",
+  "🥳",
+  "😊",
+  "🐱",
+  "🐶",
+  "🐼",
+  "🦊",
+  "🐸",
+  "🐻",
+  "🌟",
+  "🍀",
+];
 const displayName = computed(
   () =>
     authStore.user?.user_metadata?.display_name ||
@@ -33,8 +53,55 @@ const displayName = computed(
     "使用者",
 );
 const memberInitial = computed(() =>
-  displayName.value.trim().slice(0, 1).toUpperCase(),
+  (isProfileEditorOpen.value ? profileName.value : displayName.value)
+    .trim()
+    .slice(0, 1)
+    .toUpperCase(),
 );
+const profileAvatar = computed(() =>
+  isProfileEditorOpen.value
+    ? profileAvatarEmoji.value || memberInitial.value
+    : authStore.user?.user_metadata?.avatar_emoji || memberInitial.value,
+);
+
+function openProfileEditor() {
+  profileName.value =
+    authStore.user?.user_metadata?.display_name ||
+    authStore.user?.email?.split("@")[0] ||
+    "";
+  profileAvatarEmoji.value = authStore.user?.user_metadata?.avatar_emoji || "";
+  profileError.value = "";
+  isProfileEditorOpen.value = true;
+}
+
+function cancelProfileEditor() {
+  isProfileEditorOpen.value = false;
+  profileError.value = "";
+}
+
+async function saveProfile() {
+  const nextName = profileName.value.trim();
+  if (!nextName) {
+    profileError.value = "請輸入使用者名稱。";
+    return;
+  }
+
+  isSavingProfile.value = true;
+  profileError.value = "";
+  try {
+    await authStore.updateProfile({
+      displayName: nextName,
+      avatarEmoji: profileAvatarEmoji.value,
+    });
+    isProfileEditorOpen.value = false;
+    if (ledgerStore.activeLedgerId)
+      await loadDrawerMembers(ledgerStore.activeLedgerId);
+  } catch (error) {
+    profileError.value = error.message || "無法更新使用者資料，請稍後再試。";
+  } finally {
+    isSavingProfile.value = false;
+  }
+}
 
 watch(
   () => route.fullPath,
@@ -76,6 +143,9 @@ async function loadDrawerMembers(ledgerId) {
 
 const drawerMemberName = (member) =>
   member.display_name || member.email?.split("@")[0] || "帳本成員";
+const drawerMemberAvatar = (member) =>
+  member.avatar_emoji ||
+  drawerMemberName(member).trim().slice(0, 1).toUpperCase();
 
 watch(
   () => ledgerStore.activeLedgerId,
@@ -170,13 +240,83 @@ onMounted(() => ledgerStore.fetchLedgers());
 
         <div class="drawer-profile">
           <span class="drawer-avatar" aria-hidden="true">{{
-            memberInitial
+            profileAvatar
           }}</span>
           <span class="drawer-profile-copy">
             <strong>{{ displayName }}</strong>
             <small>{{ authStore.user?.email }}</small>
           </span>
+          <button
+            class="profile-edit-button"
+            type="button"
+            aria-label="編輯使用者資訊"
+            @click="openProfileEditor"
+          >
+            <Pencil :size="16" />
+          </button>
         </div>
+
+        <form
+          v-if="isProfileEditorOpen"
+          class="profile-editor"
+          @submit.prevent="saveProfile"
+        >
+          <div class="profile-editor-heading">
+            <strong>編輯使用者資訊</strong>
+            <button
+              class="profile-editor-cancel"
+              type="button"
+              @click="cancelProfileEditor"
+            >
+              取消
+            </button>
+          </div>
+          <label class="profile-editor-field">
+            <span>使用者名稱</span>
+            <input
+              v-model="profileName"
+              autocomplete="nickname"
+              maxlength="40"
+              placeholder="輸入使用者名稱"
+              required
+              type="text"
+            />
+          </label>
+          <fieldset class="profile-avatar-picker">
+            <legend>選擇 Emoji 頭像</legend>
+            <div class="profile-avatar-options">
+              <button
+                v-for="emoji in avatarChoices"
+                :key="emoji"
+                class="profile-avatar-option"
+                :class="{ selected: profileAvatarEmoji === emoji }"
+                type="button"
+                :aria-label="`選擇 ${emoji} 頭像`"
+                :aria-pressed="profileAvatarEmoji === emoji"
+                @click="profileAvatarEmoji = emoji"
+              >
+                {{ emoji }}
+              </button>
+            </div>
+            <button
+              class="profile-avatar-reset"
+              type="button"
+              @click="profileAvatarEmoji = ''"
+            >
+              重設為名稱首字
+            </button>
+          </fieldset>
+          <p v-if="profileError" class="profile-editor-error" role="alert">
+            {{ profileError }}
+          </p>
+          <button
+            class="profile-editor-save"
+            type="submit"
+            :disabled="isSavingProfile || !profileName.trim()"
+          >
+            {{ isSavingProfile ? "儲存中…" : "儲存變更" }}
+          </button>
+        </form>
 
         <p class="drawer-section-label">帳本資訊</p>
         <div class="drawer-members-heading">
@@ -207,8 +347,8 @@ onMounted(() => ledgerStore.fetchLedgers());
             :key="member.user_id"
             class="drawer-member-row"
           >
-            <span class="drawer-member-avatar">{{
-              drawerMemberName(member).slice(0, 1).toUpperCase()
+            <span class="drawer-member-avatar" aria-hidden="true">{{
+              drawerMemberAvatar(member)
             }}</span>
             <span class="drawer-member-copy">
               <strong>{{ drawerMemberName(member) }}</strong>
