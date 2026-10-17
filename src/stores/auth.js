@@ -1,65 +1,114 @@
 import { defineStore } from "pinia";
+import { computed, ref } from "vue";
 import { supabase } from "../lib/supabase";
 
-export const useAuthStore = defineStore("auth", {
-  state: () => ({
-    session: null,
-    initialized: false,
-    initializationError: "",
-  }),
-  getters: {
-    user: (state) => state.session?.user ?? null,
-  },
-  actions: {
-    async initialize() {
-      if (this.initialized) return;
-      if (!supabase) {
-        this.initialized = true;
-        return;
-      }
+export const useAuthStore = defineStore("auth", () => {
+  const session = ref(null);
+  const initialized = ref(false);
+  const initializationError = ref("");
+  const user = computed(() => session.value?.user ?? null);
 
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) this.initializationError = error.message;
-        this.session = data?.session ?? null;
+  async function initialize() {
+    if (initialized.value) return;
+    if (!supabase) {
+      initialized.value = true;
+      return;
+    }
 
-        supabase.auth.onAuthStateChange((_event, session) => {
-          this.session = session;
-        });
-      } catch (error) {
-        this.initializationError = error.message || "無法連線至 Supabase。";
-      } finally {
-        this.initialized = true;
-      }
-    },
-    async signIn(email, password) {
-      if (!supabase) throw new Error("尚未設定 Supabase 環境變數。");
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) initializationError.value = error.message;
+      session.value = data?.session ?? null;
+
+      supabase.auth.onAuthStateChange((_event, authSession) => {
+        session.value = authSession;
       });
-      if (error) throw error;
-      this.session = data.session;
-    },
-    async signUp(email, password, displayName) {
-      if (!supabase) throw new Error("尚未設定 Supabase 環境變數。");
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { display_name: displayName },
-          emailRedirectTo: `${window.location.origin}${window.location.pathname}${window.location.search}`,
-        },
-      });
-      if (error) throw error;
-      this.session = data.session;
-      return data;
-    },
-    async signOut() {
-      if (!supabase) return;
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-      this.session = null;
-    },
-  },
+    } catch (error) {
+      initializationError.value = error.message || "無法連線至 Supabase。";
+    } finally {
+      initialized.value = true;
+    }
+  }
+
+  async function signIn(email, password) {
+    if (!supabase) throw new Error("尚未設定 Supabase 環境變數。");
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) throw error;
+    session.value = data.session;
+  }
+
+  async function signUp(email, password, displayName) {
+    if (!supabase) throw new Error("尚未設定 Supabase 環境變數。");
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { display_name: displayName },
+        emailRedirectTo: `${window.location.origin}${window.location.pathname}${window.location.search}`,
+      },
+    });
+    if (error) throw error;
+    session.value = data.session;
+    return data;
+  }
+
+  async function updateProfile({ displayName, avatarEmoji = "" }) {
+    if (!supabase) throw new Error("尚未設定 Supabase 環境變數。");
+    if (!user.value) throw new Error("登入狀態已失效，請重新登入後再試。");
+
+    const normalizedName = displayName.trim();
+    if (!normalizedName) throw new Error("使用者名稱不可空白。");
+    if (normalizedName.length > 40)
+      throw new Error("使用者名稱不可超過 40 個字。");
+
+    const previousName = user.value.user_metadata?.display_name || "";
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .update({ display_name: normalizedName })
+      .eq("id", user.value.id)
+      .select("id")
+      .maybeSingle();
+    if (profileError) throw profileError;
+    if (!profile) throw new Error("找不到使用者資料，無法更新名稱。");
+
+    const { data, error } = await supabase.auth.updateUser({
+      data: {
+        display_name: normalizedName,
+        avatar_emoji: avatarEmoji || null,
+      },
+    });
+    if (error) {
+      await supabase
+        .from("users")
+        .update({ display_name: previousName })
+        .eq("id", user.value.id);
+      throw error;
+    }
+
+    if (session.value && data.user) {
+      session.value = { ...session.value, user: data.user };
+    }
+  }
+
+  async function signOut() {
+    if (!supabase) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    session.value = null;
+  }
+
+  return {
+    session,
+    initialized,
+    initializationError,
+    user,
+    initialize,
+    signIn,
+    signUp,
+    updateProfile,
+    signOut,
+  };
 });
