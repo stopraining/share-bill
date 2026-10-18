@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/share-bill/sw.js', { scope: '/share-bill/' })})}
