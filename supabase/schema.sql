@@ -491,6 +491,8 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_ledger_id uuid;
+  v_updated_rows integer;
+  v_saved_paid_by uuid;
   v_payer_name text;
   v_split_count integer;
   v_regular_share numeric(12, 2);
@@ -556,6 +558,19 @@ begin
       notes = coalesce(p_notes, ''),
       updated_at = now()
   where id = p_expense_id and created_by = v_user_id;
+
+  get diagnostics v_updated_rows = row_count;
+  if v_updated_rows <> 1 then
+    raise exception '費用資料沒有成功更新，請重新載入後再試。';
+  end if;
+
+  select e.paid_by into v_saved_paid_by
+  from public.expenses e
+  where e.id = p_expense_id;
+  if v_saved_paid_by is distinct from p_paid_by then
+    raise exception 'PAYER_UPDATE_MISMATCH: requested %, saved %. 請檢查 public.expenses 的 UPDATE trigger 或目前部署的 RPC。',
+      p_paid_by, v_saved_paid_by;
+  end if;
 
   delete from public.expense_splits where expense_id = p_expense_id;
   v_regular_share := trunc(round(p_amount, 2) / v_split_count, 2);
@@ -678,7 +693,7 @@ create index if not exists settlements_ledger_started_idx
 
 create table if not exists public.settlement_expenses (
   settlement_id uuid not null references public.settlements (id) on delete cascade,
-  expense_id uuid not null references public.expenses (id) on delete restrict,
+  expense_id uuid not null references public.expenses (id) on delete cascade,
   primary key (settlement_id, expense_id),
   unique (expense_id)
 );
@@ -893,8 +908,17 @@ security definer
 set search_path = ''
 as $$
 begin
+  if tg_op = 'DELETE' and not exists (
+    select 1 from public.ledgers l where l.id = old.ledger_id
+  ) then
+    return old;
+  end if;
+
   if exists (select 1 from public.settlement_expenses se where se.expense_id = old.id) then
-    raise exception '此費用已進入結算或歷史紀錄，為保留帳目請新增調整費用，不可編輯或刪除。';
+    raise exception '此費用已進入結算或歷史紀錄，為保留帳目不可單獨編輯或刪除。';
+  end if;
+  if tg_op = 'UPDATE' then
+    return new;
   end if;
   return old;
 end;

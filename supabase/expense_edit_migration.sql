@@ -19,6 +19,8 @@ as $$
 declare
   v_user_id uuid := auth.uid();
   v_ledger_id uuid;
+  v_updated_rows integer;
+  v_saved_paid_by uuid;
   v_payer_name text;
   v_split_count integer;
   v_regular_share numeric(12, 2);
@@ -84,6 +86,19 @@ begin
       notes = coalesce(p_notes, ''),
       updated_at = now()
   where id = p_expense_id and created_by = v_user_id;
+
+  get diagnostics v_updated_rows = row_count;
+  if v_updated_rows <> 1 then
+    raise exception '費用資料沒有成功更新，請重新載入後再試。';
+  end if;
+
+  select e.paid_by into v_saved_paid_by
+  from public.expenses e
+  where e.id = p_expense_id;
+  if v_saved_paid_by is distinct from p_paid_by then
+    raise exception 'PAYER_UPDATE_MISMATCH: requested %, saved %. 請檢查 public.expenses 的 UPDATE trigger 或目前部署的 RPC。',
+      p_paid_by, v_saved_paid_by;
+  end if;
 
   delete from public.expense_splits where expense_id = p_expense_id;
   v_regular_share := trunc(round(p_amount, 2) / v_split_count, 2);

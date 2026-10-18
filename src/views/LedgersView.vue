@@ -26,6 +26,7 @@ const invitationToken = ref("");
 const invitationLink = ref("");
 const joinToken = ref("");
 const message = ref("");
+const messageIsError = ref(false);
 const isSubmitting = ref(false);
 const deletingLedgerId = ref("");
 const copied = ref(false);
@@ -118,11 +119,18 @@ async function deleteLedger(ledger) {
 
   deletingLedgerId.value = ledger.id;
   message.value = "";
+  messageIsError.value = false;
   try {
     await ledgerStore.deleteLedger(ledger.id);
     message.value = `帳本「${ledger.name}」已刪除。`;
   } catch (error) {
-    message.value = error.message || "刪除帳本失敗。";
+    messageIsError.value = true;
+    const details = [error.message, error.details, error.hint]
+      .filter(Boolean)
+      .join(" ");
+    message.value = details.includes("settlement_expenses")
+      ? "資料庫仍有結算歷史的刪除限制。請在 Supabase SQL Editor 執行 supabase/ledger_delete_migration.sql 後重試。"
+      : error.message || "刪除帳本失敗。";
   } finally {
     deletingLedgerId.value = "";
   }
@@ -182,7 +190,14 @@ function parseInviteInput() {
   <p v-if="ledgerStore.error" class="ledger-feedback error" role="alert">
     {{ ledgerStore.error }}
   </p>
-  <div v-if="message" class="ledger-feedback" role="status">{{ message }}</div>
+  <div
+    v-if="message"
+    class="ledger-feedback"
+    :class="{ error: messageIsError }"
+    :role="messageIsError ? 'alert' : 'status'"
+  >
+    {{ message }}
+  </div>
 
   <section class="ledger-actions">
     <button class="ledger-action" type="button" @click="startCreate">

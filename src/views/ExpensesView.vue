@@ -21,8 +21,11 @@ const expenseStore = useExpenseStore();
 const authStore = useAuthStore();
 const members = ref([]);
 const membersError = ref("");
+const settledExpenseIds = ref(new Set());
+const settlementLookupError = ref("");
 const editingExpenseId = ref("");
 const editError = ref("");
+const editSuccess = ref("");
 const isSavingEdit = ref(false);
 const deletingExpenseId = ref("");
 const editForm = ref({
@@ -82,16 +85,35 @@ const editPerPerson = computed(() =>
 );
 const isExpenseCreator = (expense) =>
   Boolean(authStore.user?.id && expense.createdBy === authStore.user.id);
+const isSettledExpense = (expense) => settledExpenseIds.value.has(expense.id);
 const getErrorMessage = (error) => {
-  const message = error?.message || "發生未知錯誤。";
-  if (message.includes("update_ledger_expense")) {
+  const message = [error?.message, error?.details, error?.hint]
+    .filter(Boolean)
+    .join(" ");
+  if (/update_ledger_expense|PGRST202/i.test(message)) {
     return "資料庫尚未建立費用編輯功能，請先執行 supabase/expense_edit_migration.sql。";
   }
-  return message;
+  if (
+    /已進入結算|settlement_expenses|prevent_settled_expense_mutation/i.test(
+      message,
+    )
+  ) {
+    return "此費用已封存於結算歷史，為保留帳目不能直接編輯；請新增一筆調整費用。";
+  }
+  if (/PAYER_UPDATE_MISMATCH/i.test(message)) {
+    return "資料庫已確認付款人欄位被改回其他值。請檢查 public.expenses 的 UPDATE trigger 或 Supabase 上的 RPC 版本。";
+  }
+  return message || "發生未知錯誤，請稍後再試。";
 };
 
 function beginEdit(expense) {
   editError.value = "";
+  editSuccess.value = "";
+  if (isSettledExpense(expense)) {
+    editError.value =
+      "此費用已封存於結算歷史，為保留帳目不能直接編輯；請新增一筆調整費用。";
+    return;
+  }
   editingExpenseId.value = expense.id;
   editForm.value = {
     title: expense.title,
@@ -113,11 +135,16 @@ async function saveEdit() {
   if (!canSaveEdit.value || !editingExpenseId.value) return;
   isSavingEdit.value = true;
   editError.value = "";
+  editSuccess.value = "";
   try {
-    await expenseStore.updateExpense(editingExpenseId.value, {
-      ...editForm.value,
-      amount: Number(editForm.value.amount),
-    });
+    const updatedExpense = await expenseStore.updateExpense(
+      editingExpenseId.value,
+      {
+        ...editForm.value,
+        amount: Number(editForm.value.amount),
+      },
+    );
+    editSuccess.value = `「${updatedExpense.title}」已更新。`;
     editingExpenseId.value = "";
   } catch (error) {
     editError.value = getErrorMessage(error);
@@ -147,7 +174,9 @@ async function loadExpensesAndMembers() {
   const ledgerId = ledgerStore.activeLedgerId;
   const currentRequest = ++requestId;
   members.value = [];
+  settledExpenseIds.value = new Set();
   membersError.value = "";
+  settlementLookupError.value = "";
   if (!ledgerId) return;
 
   if (
@@ -158,14 +187,42 @@ async function loadExpensesAndMembers() {
   }
   if (!supabase) return;
 
-  const { data, error } = await supabase.rpc("list_ledger_members", {
-    p_ledger_id: ledgerId,
-  });
-  if (error) {
-    if (currentRequest === requestId) membersError.value = error.message;
+  const [memberResult, settlementResult] = await Promise.all([
+    supabase.rpc("list_ledger_members", { p_ledger_id: ledgerId }),
+    supabase.from("settlements").select("id").eq("ledger_id", ledgerId),
+  ]);
+  if (memberResult.error) {
+    if (currentRequest === requestId)
+      membersError.value = memberResult.error.message;
+  } else if (currentRequest === requestId) {
+    members.value = memberResult.data || [];
+  }
+
+  if (settlementResult.error) {
+    if (currentRequest === requestId)
+      settlementLookupError.value = settlementResult.error.message;
     return;
   }
-  if (currentRequest === requestId) members.value = data || [];
+
+  const settlementIds = (settlementResult.data || []).map(
+    (settlement) => settlement.id,
+  );
+  if (!settlementIds.length) return;
+
+  const { data: settledRows, error: settledError } = await supabase
+    .from("settlement_expenses")
+    .select("expense_id")
+    .in("settlement_id", settlementIds);
+  if (settledError) {
+    if (currentRequest === requestId)
+      settlementLookupError.value = settledError.message;
+    return;
+  }
+  if (currentRequest === requestId) {
+    settledExpenseIds.value = new Set(
+      (settledRows || []).map((row) => row.expense_id),
+    );
+  }
 }
 
 watch(() => ledgerStore.activeLedgerId, loadExpensesAndMembers);
@@ -203,8 +260,14 @@ onMounted(loadExpensesAndMembers);
     <p v-if="membersError" class="expense-error" role="alert">
       無法載入成員名稱：{{ membersError }}
     </p>
+    <p v-if="settlementLookupError" class="expense-error" role="alert">
+      無法確認費用是否已結算：{{ settlementLookupError }}
+    </p>
     <p v-if="editError && !editingExpenseId" class="expense-error" role="alert">
       {{ editError }}
+    </p>
+    <p v-if="editSuccess" class="ledger-feedback" role="status">
+      {{ editSuccess }}
     </p>
     <div v-if="incompleteCount" class="notice incomplete-notice">
       {{ incompleteCount }} 筆舊費用沒有分攤明細，請在紀錄中展開確認。
@@ -277,19 +340,36 @@ onMounted(loadExpensesAndMembers);
           >
             <button
               class="expense-edit-button"
+              :disabled="isSettledExpense(expense)"
+              :title="
+                isSettledExpense(expense)
+                  ? '已結算費用不可直接編輯'
+                  : '編輯費用'
+              "
               type="button"
               @click.prevent="beginEdit(expense)"
             >
-              <Pencil :size="15" />編輯
+              <Pencil :size="15" />{{
+                isSettledExpense(expense) ? "已結算" : "編輯"
+              }}
             </button>
             <button
               class="expense-delete-button"
-              :disabled="deletingExpenseId === expense.id"
+              :disabled="
+                deletingExpenseId === expense.id || isSettledExpense(expense)
+              "
+              :title="
+                isSettledExpense(expense) ? '已結算費用不可刪除' : '刪除費用'
+              "
               type="button"
               @click.prevent="deleteExpense(expense)"
             >
               <Trash2 :size="15" />{{
-                deletingExpenseId === expense.id ? "刪除中…" : "刪除"
+                deletingExpenseId === expense.id
+                  ? "刪除中…"
+                  : isSettledExpense(expense)
+                    ? "已封存"
+                    : "刪除"
               }}
             </button>
           </div>

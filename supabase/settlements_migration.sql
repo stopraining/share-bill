@@ -253,10 +253,19 @@ security definer
 set search_path = ''
 as $$
 begin
+  if tg_op = 'DELETE' and not exists (
+    select 1 from public.ledgers l where l.id = old.ledger_id
+  ) then
+    return old;
+  end if;
+
   if exists (
     select 1 from public.settlement_expenses se where se.expense_id = old.id
   ) then
-    raise exception '此費用已進入結算或歷史紀錄，為保留帳目請新增調整費用，不可編輯或刪除。';
+    raise exception '此費用已進入結算或歷史紀錄，為保留帳目不可單獨編輯或刪除。';
+  end if;
+  if tg_op = 'UPDATE' then
+    return new;
   end if;
   return old;
 end;

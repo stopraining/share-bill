@@ -196,12 +196,17 @@ const formatDate = (value) =>
     month: "numeric",
     day: "numeric",
   });
+
+const loadApp = () => {
+  window.location.reload();
+};
 </script>
 
 <template>
   <section class="page-heading">
     <p class="eyebrow">
-      {{ ledgerStore.activeLedger?.name || "歡迎使用分分" }}
+      {{ ledgerStore.activeLedger?.name || "歡迎使用分分"
+      }}<button @click="loadApp" class="load-app-btn">🔄</button>
     </p>
     <h1>{{ ledgerStore.activeLedger ? "大家的帳本" : "先建立你的帳本" }}</h1>
   </section>

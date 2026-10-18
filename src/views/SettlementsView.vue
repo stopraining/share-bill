@@ -148,7 +148,9 @@ const shareText = computed(() => {
     if (!memberExpenses.length) continue;
     lines.push("", `${memberName(userId)}：`);
     for (const expense of [...memberExpenses].reverse()) {
-      lines.push(`${expense.title} ${currency.value.format(expense.amount)}`);
+      lines.push(
+        `${expense.title} ${currency.value.format(expense.amount)} \n`,
+      );
     }
   }
 

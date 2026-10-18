@@ -259,6 +259,39 @@ export const useExpenseStore = defineStore("expenses", () => {
       .eq("id", expenseId)
       .single();
     if (error) throw error;
+    const expectedTitle = expense.title.trim();
+    const expectedAmount = Math.round(Number(expense.amount) * 100);
+    const savedAmount = Math.round(Number(data.amount) * 100);
+    const expectedDate = String(expense.expenseDate || "").slice(0, 10);
+    const savedDate = String(data.expense_date || "").slice(0, 10);
+    const savedSplitIds = new Set(
+      (data.expense_splits || []).map((split) => split.user_id),
+    );
+    const mismatchedFields = [];
+    if (data.title !== expectedTitle) mismatchedFields.push("費用名稱");
+    if (savedAmount !== expectedAmount) mismatchedFields.push("金額");
+    if (data.paid_by !== expense.payerUserId) {
+      mismatchedFields.push(
+        `付款人（表單送出 ${expense.payerUserId || "空值"}；資料庫回傳 ${data.paid_by || "空值"}）`,
+      );
+    }
+    if (data.category !== (expense.category || "其他"))
+      mismatchedFields.push("分類");
+    if (savedDate !== expectedDate) mismatchedFields.push("日期");
+    if ((data.notes || "") !== (expense.notes || ""))
+      mismatchedFields.push("備註");
+    if (
+      savedSplitIds.size !== splitUserIds.length ||
+      splitUserIds.some((userId) => !savedSplitIds.has(userId))
+    ) {
+      mismatchedFields.push("分攤成員");
+    }
+
+    if (mismatchedFields.length) {
+      throw new Error(
+        `資料庫未更新以下欄位：${mismatchedFields.join("、")}。請在 Supabase SQL Editor 重新執行最新的 supabase/expense_edit_migration.sql 後再試。`,
+      );
+    }
     if (ledgerId.value !== targetLedgerId) {
       throw new Error("費用已更新，但目前已切換帳本。請返回原帳本查看。");
     }
