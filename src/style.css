@@ -722,6 +722,39 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.settlement-share-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: -13px 0 20px;
+}
+.settlement-share-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--green);
+  border-radius: 13px;
+  color: #fff;
+  background: var(--green);
+  font-size: 12px;
+  font-weight: 650;
+}
+.settlement-share-button.secondary {
+  color: var(--green);
+  background: #fff;
+}
+.settlement-share-button:active {
+  transform: scale(0.98);
+}
+.settlement-share-message {
+  margin: -11px 2px 17px;
+  color: var(--green);
+  font-size: 11px;
+  line-height: 1.45;
+}
 .settlement-section-row {
   margin-top: 27px;
 }
@@ -827,9 +860,11 @@ h2 {
   gap: 10px;
 }
 .active-settlement-heading {
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
   gap: 11px;
+  min-width: 0;
   padding: 14px;
   border: 1px solid #dcebdd;
   border-radius: 16px;
@@ -858,6 +893,8 @@ h2 {
   margin-top: 4px;
   color: var(--muted);
   font-size: 10px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .settlement-transfer-row {
   padding: 12px;
@@ -1074,7 +1111,7 @@ h2 {
   overflow-y: auto;
   gap: 8px;
   margin-bottom: 20px;
-  padding: 1px 4px 1px 1px;
+  padding: 1px;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-gutter: stable;
@@ -1125,14 +1162,18 @@ h2 {
 }
 .active-expense-snapshot {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 220px;
+  overflow-x: hidden;
+  overflow-y: auto;
   gap: 7px;
   padding: 12px 13px;
   border: 1px solid var(--line);
   border-radius: 14px;
   color: #60675e;
   background: #fff;
-  font-size: 10px;
-  margin-left: auto;
+  font-size: 12px;
 }
 .active-expense-snapshot strong {
   color: var(--ink);
@@ -1140,8 +1181,18 @@ h2 {
 }
 .active-expense-snapshot span {
   display: flex;
+  min-width: 0;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 8px;
+}
+.active-expense-snapshot-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.active-expense-snapshot-amount {
+  flex: none;
+  white-space: nowrap;
 }
 .settlement-expense summary .expense-amount {
   flex: none;
@@ -1620,6 +1671,46 @@ h2 {
 .ledger-card.active {
   border-color: #bad2c1;
   background: #f8fbf7;
+}
+.ledger-card-select {
+  display: flex;
+  min-width: 0;
+  min-height: 46px;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+.ledger-delete-action {
+  display: flex;
+  flex: none;
+  align-items: center;
+  border-left: 1px solid var(--line);
+  padding-left: 9px;
+}
+.ledger-delete-button {
+  display: grid;
+  min-width: 43px;
+  min-height: 42px;
+  justify-items: center;
+  align-content: center;
+  gap: 3px;
+  padding: 3px;
+  border: 0;
+  border-radius: 11px;
+  color: #a23d30;
+  background: transparent;
+  font-size: 9px;
+  font-weight: 650;
+}
+.ledger-delete-button:disabled {
+  opacity: 0.55;
+}
+.ledger-delete-button:not(:disabled):active {
+  background: #fff0ed;
 }
 .ledger-card-copy {
   min-width: 0;

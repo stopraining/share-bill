@@ -33,18 +33,24 @@ const profileAvatarEmoji = ref("");
 const isSavingProfile = ref(false);
 const profileError = ref("");
 const avatarChoices = [
-  "😀",
-  "😎",
-  "🥳",
-  "😊",
   "🐱",
   "🐶",
-  "🐼",
   "🦊",
-  "🐸",
   "🐻",
-  "🌟",
-  "🍀",
+  "🐹",
+  "🦁",
+  "🐯",
+  "🐨",
+  "🐿️",
+  "🦙",
+  "🦒",
+  "🦕",
+  "🐬",
+  "🐟",
+  "🐙",
+  "🐜",
+  "🦋",
+  "🐞",
 ];
 const displayName = computed(
   () =>

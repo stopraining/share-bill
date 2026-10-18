@@ -5,6 +5,7 @@ import {
   BookOpen,
   Check,
   Copy,
+  Trash2,
   Plus,
   UsersRound,
 } from "lucide-vue-next";
@@ -26,6 +27,7 @@ const invitationLink = ref("");
 const joinToken = ref("");
 const message = ref("");
 const isSubmitting = ref(false);
+const deletingLedgerId = ref("");
 const copied = ref(false);
 const isOwner = (ledger) => ledger.owner_id === authStore.user?.id;
 const joinTokenPattern =
@@ -105,6 +107,24 @@ async function copyInvitation() {
     }, 1800);
   } catch {
     message.value = "瀏覽器無法自動複製，請手動複製下方連結。";
+  }
+}
+
+async function deleteLedger(ledger) {
+  const confirmed = window.confirm(
+    `確定要刪除帳本「${ledger.name}」嗎？此操作無法復原，帳本內的支出、分攤和結算歷史也會一併刪除。`,
+  );
+  if (!confirmed || deletingLedgerId.value) return;
+
+  deletingLedgerId.value = ledger.id;
+  message.value = "";
+  try {
+    await ledgerStore.deleteLedger(ledger.id);
+    message.value = `帳本「${ledger.name}」已刪除。`;
+  } catch (error) {
+    message.value = error.message || "刪除帳本失敗。";
+  } finally {
+    deletingLedgerId.value = "";
   }
 }
 
@@ -292,29 +312,48 @@ function parseInviteInput() {
       <p>還沒有帳本，建立一個新帳本或使用邀請連結加入吧。</p>
     </div>
     <div v-else class="ledger-list">
-      <button
+      <div
         v-for="ledger in ledgerStore.ledgers"
         :key="ledger.id"
         class="ledger-card"
         :class="{ active: ledger.id === ledgerStore.activeLedgerId }"
-        type="button"
-        @click="selectLedger(ledger.id)"
       >
-        <span class="ledger-avatar"><BookOpen :size="19" /></span>
-        <span class="ledger-card-copy"
-          ><strong>{{ ledger.name }}</strong
-          ><small>{{
-            ledger.description ||
-            (isOwner(ledger) ? "你建立的帳本" : "朋友分享的帳本")
-          }}</small></span
+        <button
+          class="ledger-card-select"
+          type="button"
+          :aria-label="`切換至帳本：${ledger.name}`"
+          @click="selectLedger(ledger.id)"
         >
-        <span
-          v-if="ledger.id === ledgerStore.activeLedgerId"
-          class="status-pill"
-          >目前使用</span
-        >
-        <ArrowRight v-else :size="17" class="ledger-chevron" />
-      </button>
+          <span class="ledger-avatar"><BookOpen :size="19" /></span>
+          <span class="ledger-card-copy"
+            ><strong>{{ ledger.name }}</strong
+            ><small>{{
+              ledger.description ||
+              (isOwner(ledger) ? "你建立的帳本" : "朋友分享的帳本")
+            }}</small></span
+          >
+          <span
+            v-if="ledger.id === ledgerStore.activeLedgerId"
+            class="status-pill"
+            >目前使用</span
+          >
+          <ArrowRight v-else :size="17" class="ledger-chevron" />
+        </button>
+        <span v-if="isOwner(ledger)" class="ledger-delete-action">
+          <button
+            class="ledger-delete-button"
+            type="button"
+            :aria-label="`刪除帳本：${ledger.name}`"
+            :disabled="deletingLedgerId === ledger.id"
+            @click="deleteLedger(ledger)"
+          >
+            <Trash2 :size="17" />
+            <span>{{
+              deletingLedgerId === ledger.id ? "刪除中" : "刪除"
+            }}</span>
+          </button>
+        </span>
+      </div>
     </div>
   </section>
 </template>

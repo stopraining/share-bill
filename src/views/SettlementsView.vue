@@ -4,10 +4,12 @@ import {
   CircleDollarSign,
   Clock3,
   Check,
+  Copy,
   HandCoins,
   Info,
   ReceiptText,
   RotateCw,
+  Share2,
   Send,
   UsersRound,
 } from "lucide-vue-next";
@@ -29,6 +31,7 @@ const settlementTransfers = ref([]);
 const settlementExpenseSnapshots = ref([]);
 const accountedExpenseIds = ref(new Set());
 const settlementError = ref("");
+const shareActionMessage = ref("");
 const isStartingSettlement = ref(false);
 const updatingTransferId = ref("");
 let dataRequestId = 0;
@@ -100,6 +103,99 @@ const activeTransfers = computed(() =>
   settlementTransfers.value.filter(
     (transfer) => transfer.settlement_id === activeSettlement.value?.id,
   ),
+);
+const shareExpenses = computed(() => {
+  if (!activeSettlement.value) return candidateExpenses.value;
+  const currentBatchExpenseIds = new Set(
+    settlementExpenseSnapshots.value
+      .filter((row) => row.settlement_id === activeSettlement.value.id)
+      .map((row) => row.expense_id),
+  );
+  return expenses.value.filter((expense) =>
+    currentBatchExpenseIds.has(expense.id),
+  );
+});
+const shareTransfers = computed(() =>
+  activeSettlement.value
+    ? activeTransfers.value.map((transfer) => ({
+        fromUserId: transfer.payer_id,
+        toUserId: transfer.payee_id,
+        amount: Number(transfer.amount),
+        status: transfer.status,
+      }))
+    : transfers.value.map((transfer) => ({
+        fromUserId: transfer.from.user_id,
+        toUserId: transfer.to.user_id,
+        amount: transfer.amount,
+        status: "pending",
+      })),
+);
+const shareText = computed(() => {
+  // const ledgerName = ledgerStore.activeLedger?.name || "帳本結算";
+  const lines = ["記帳："];
+  const expenseGroups = new Map(
+    members.value.map((member) => [member.user_id, []]),
+  );
+
+  for (const expense of shareExpenses.value) {
+    if (!expenseGroups.has(expense.payerUserId)) {
+      expenseGroups.set(expense.payerUserId, []);
+    }
+    expenseGroups.get(expense.payerUserId).push(expense);
+  }
+
+  for (const [userId, memberExpenses] of expenseGroups) {
+    if (!memberExpenses.length) continue;
+    lines.push("", `${memberName(userId)}：`);
+    for (const expense of [...memberExpenses].reverse()) {
+      lines.push(`${expense.title} ${currency.value.format(expense.amount)}`);
+    }
+  }
+
+  const advances = shareExpenses.value.filter(
+    (expense) =>
+      expense.payerUserId &&
+      expense.splits?.length &&
+      !expense.splits.some((split) => split.userId === expense.payerUserId),
+  );
+  if (advances.length) {
+    lines.push("", "代墊：");
+    for (const expense of advances) {
+      const recipients = expense.splits
+        .map((split) => memberName(split.userId))
+        .join("、");
+      lines.push(
+        `${memberName(expense.payerUserId)} 幫 ${recipients} 出 ${expense.title} ${currency.value.format(expense.amount)}`,
+      );
+    }
+  }
+
+  const average = members.value.length
+    ? shareExpenses.value.reduce((sum, expense) => sum + expense.amount, 0) /
+      members.value.length
+    : 0;
+  lines.push("", `平均一人 ${currency.value.format(average)}`, "");
+
+  if (shareTransfers.value.length) {
+    for (const transfer of shareTransfers.value) {
+      const statusLabel =
+        transfer.status === "confirmed"
+          ? "已確認"
+          : transfer.status === "paid"
+            ? "已匯款，待確認"
+            : "待匯款";
+      lines.push(
+        `${memberName(transfer.fromUserId)} 給 ${memberName(transfer.toUserId)} ${currency.value.format(transfer.amount)}（${statusLabel}）`,
+      );
+    }
+  } else {
+    lines.push("本輪無需轉帳");
+  }
+
+  return lines.join("\n");
+});
+const canShareSettlement = computed(
+  () => shareExpenses.value.length > 0 || shareTransfers.value.length > 0,
 );
 const currentBatchExpenseCount = computed(
   () => activeSettlement.value?.expense_count || candidateExpenses.value.length,
@@ -283,6 +379,49 @@ async function runTransferAction(transfer, action) {
   }
 }
 
+async function copySettlementSummary() {
+  shareActionMessage.value = "";
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(shareText.value);
+    } else {
+      const textArea = document.createElement("textarea");
+      textArea.value = shareText.value;
+      textArea.setAttribute("readonly", "");
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+      document.body.append(textArea);
+      textArea.select();
+      const copied = document.execCommand("copy");
+      textArea.remove();
+      if (!copied) throw new Error("瀏覽器無法複製文字。");
+    }
+    shareActionMessage.value = "結算明細已複製。";
+  } catch (error) {
+    shareActionMessage.value = error.message || "複製失敗，請稍後再試。";
+  }
+}
+
+async function shareSettlementSummary() {
+  shareActionMessage.value = "";
+  if (!navigator.share) {
+    shareActionMessage.value = "此瀏覽器不支援直接分享，請使用複製按鈕。";
+    return;
+  }
+
+  try {
+    await navigator.share({
+      title: `${ledgerStore.activeLedger?.name || "帳本"} 結算明細`,
+      text: shareText.value,
+    });
+    shareActionMessage.value = "已開啟分享選單。";
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      shareActionMessage.value = error.message || "分享失敗，請稍後再試。";
+    }
+  }
+}
+
 const transferStatus = (status) =>
   ({
     pending: "待付款人匯款",
@@ -367,6 +506,26 @@ onMounted(loadLedgerData);
       </article>
     </div>
 
+    <div v-if="canShareSettlement" class="settlement-share-actions">
+      <button
+        class="settlement-share-button"
+        type="button"
+        @click="shareSettlementSummary"
+      >
+        <Share2 :size="17" />分享明細
+      </button>
+      <button
+        class="settlement-share-button secondary"
+        type="button"
+        @click="copySettlementSummary"
+      >
+        <Copy :size="17" />複製文字
+      </button>
+    </div>
+    <p v-if="shareActionMessage" class="settlement-share-message" role="status">
+      {{ shareActionMessage }}
+    </p>
+
     <section>
       <div class="section-row settlement-section-row">
         <h2>{{ activeSettlement ? "本輪轉帳狀態" : "待結算預覽" }}</h2>
@@ -397,26 +556,29 @@ onMounted(loadLedgerData);
               {{ activeSettlement.expense_count }} 筆費用</small
             ></span
           >
-          <div
-            v-if="
-              settlementExpenseSnapshots.some(
-                (row) => row.settlement_id === activeSettlement.id,
-              )
-            "
-            class="active-expense-snapshot"
+        </div>
+        <div
+          v-if="
+            settlementExpenseSnapshots.some(
+              (row) => row.settlement_id === activeSettlement.id,
+            )
+          "
+          class="active-expense-snapshot"
+        >
+          <strong>本輪費用快照</strong>
+          <span
+            v-for="row in settlementExpenseSnapshots.filter(
+              (item) => item.settlement_id === activeSettlement.id,
+            )"
+            :key="row.expense_id"
           >
-            <strong>本輪費用快照</strong>
-            <span
-              v-for="row in settlementExpenseSnapshots.filter(
-                (item) => item.settlement_id === activeSettlement.id,
-              )"
-              :key="row.expense_id"
-            >
-              {{ row.expenses?.title || "費用紀錄" }}・{{
-                currency.format(row.expenses?.amount || 0)
-              }}
-            </span>
-          </div>
+            <span class="active-expense-snapshot-title">{{
+              row.expenses?.title || "費用紀錄"
+            }}</span>
+            <strong class="active-expense-snapshot-amount">{{
+              currency.format(row.expenses?.amount || 0)
+            }}</strong>
+          </span>
         </div>
         <article
           v-for="transfer in activeTransfers"

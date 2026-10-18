@@ -83,6 +83,28 @@ export const useLedgerStore = defineStore("ledgers", () => {
     return data;
   }
 
+  async function deleteLedger(ledgerId) {
+    if (!supabase) throw new Error("尚未連線 Supabase。");
+    const ledger = ledgers.value.find((item) => item.id === ledgerId);
+    if (!ledger) throw new Error("找不到要刪除的帳本，請重新整理後再試。");
+
+    const { data, error } = await supabase
+      .from("ledgers")
+      .delete()
+      .eq("id", ledgerId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("刪除失敗，請確認你是此帳本的擁有者。");
+
+    localStorage.removeItem(`share-bill-expenses:${ledgerId}`);
+    localStorage.removeItem(`share-bill-expenses-migrated:${ledgerId}`);
+    ledgers.value = ledgers.value.filter((item) => item.id !== ledgerId);
+    if (activeLedgerId.value === ledgerId) {
+      setActiveLedger(ledgers.value[0]?.id || "");
+    }
+  }
+
   return {
     ledgers,
     activeLedgerId,
@@ -94,5 +116,6 @@ export const useLedgerStore = defineStore("ledgers", () => {
     createLedger,
     acceptInvitation,
     inviteMember,
+    deleteLedger,
   };
 });
