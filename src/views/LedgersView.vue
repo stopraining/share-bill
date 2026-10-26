@@ -5,6 +5,7 @@ import {
   BookOpen,
   Check,
   Copy,
+  Pencil,
   Trash2,
   Plus,
   UsersRound,
@@ -29,6 +30,9 @@ const message = ref("");
 const messageIsError = ref(false);
 const isSubmitting = ref(false);
 const deletingLedgerId = ref("");
+const editingLedgerId = ref("");
+const editedLedgerName = ref("");
+const isSavingLedgerName = ref(false);
 const copied = ref(false);
 const isOwner = (ledger) => ledger.owner_id === authStore.user?.id;
 const joinTokenPattern =
@@ -133,6 +137,42 @@ async function deleteLedger(ledger) {
       : error.message || "刪除帳本失敗。";
   } finally {
     deletingLedgerId.value = "";
+  }
+}
+
+function startRenameLedger(ledger) {
+  message.value = "";
+  messageIsError.value = false;
+  editingLedgerId.value = ledger.id;
+  editedLedgerName.value = ledger.name;
+}
+
+function cancelRenameLedger() {
+  editingLedgerId.value = "";
+  editedLedgerName.value = "";
+}
+
+async function saveLedgerName(ledger) {
+  const name = editedLedgerName.value.trim();
+  if (!name || isSavingLedgerName.value) return;
+  isSavingLedgerName.value = true;
+  message.value = "";
+  messageIsError.value = false;
+  try {
+    await ledgerStore.renameLedger(ledger.id, name);
+    editingLedgerId.value = "";
+    editedLedgerName.value = "";
+    message.value = `帳本名稱已更新為「${name}」。`;
+  } catch (error) {
+    messageIsError.value = true;
+    const details = [error.message, error.details, error.hint]
+      .filter(Boolean)
+      .join(" ");
+    message.value = /rename_ledger|PGRST202/i.test(details)
+      ? "資料庫尚未啟用帳本改名功能，請執行 supabase/ledger_rename_migration.sql。"
+      : error.message || "修改帳本名稱失敗。";
+  } finally {
+    isSavingLedgerName.value = false;
   }
 }
 
@@ -354,7 +394,17 @@ function parseInviteInput() {
           >
           <ArrowRight v-else :size="17" class="ledger-chevron" />
         </button>
-        <span v-if="isOwner(ledger)" class="ledger-delete-action">
+        <span v-if="isOwner(ledger)" class="ledger-card-actions">
+          <button
+            v-if="editingLedgerId !== ledger.id"
+            class="ledger-edit-button"
+            type="button"
+            :aria-label="`修改帳本名稱：${ledger.name}`"
+            @click="startRenameLedger(ledger)"
+          >
+            <Pencil :size="16" />
+            <span>改名</span>
+          </button>
           <button
             class="ledger-delete-button"
             type="button"
@@ -368,6 +418,39 @@ function parseInviteInput() {
             }}</span>
           </button>
         </span>
+        <form
+          v-if="editingLedgerId === ledger.id"
+          class="ledger-rename-form"
+          @submit.prevent="saveLedgerName(ledger)"
+        >
+          <label :for="`ledger-name-${ledger.id}`">修改帳本名稱</label>
+          <input
+            :id="`ledger-name-${ledger.id}`"
+            v-model="editedLedgerName"
+            maxlength="80"
+            required
+            autofocus
+          />
+          <div class="ledger-rename-actions">
+            <button
+              class="expense-edit-button"
+              type="button"
+              :disabled="isSavingLedgerName"
+              @click="cancelRenameLedger"
+            >
+              取消
+            </button>
+            <button
+              class="primary-button"
+              type="submit"
+              :disabled="!editedLedgerName.trim() || isSavingLedgerName"
+            >
+              <Check :size="15" />{{
+                isSavingLedgerName ? "儲存中…" : "儲存名稱"
+              }}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </section>

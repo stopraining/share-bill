@@ -4,6 +4,8 @@
 
 若已執行過帳本 schema，只要啟用支出雲端同步，請改執行 `expense_migration.sql`。之後重新載入 App；新增支出會寫入資料庫，首頁會讀取目前帳本的雲端支出。本機既有支出會在首次載入時嘗試上傳至目前帳本，只有上傳成功才清除舊版全域快取。
 
+若帳本 schema 已部署，欲啟用「修改帳本名稱」，請執行 `ledger_rename_migration.sql`。只有帳本擁有者可以修改名稱，且名稱長度為 1 至 80 個字。
+
 已部署支出表的專案若要啟用「選擇付款人及分攤成員」，請再執行 `expense_splits_migration.sql`，建立原子化的 `create_ledger_expense` RPC。它會驗證付款人與所有分攤者屬於該帳本，並在同一個交易中新增支出和分攤資料。
 
 若要啟用費用編輯，還需要執行 `expense_edit_migration.sql`。它建立 `update_ledger_expense` RPC，在同一交易中更新費用及分攤資料；只有建立該費用的使用者可以編輯或刪除。資料表的 RLS 會拒絕其他成員的直接編輯/刪除請求。

@@ -1293,6 +1293,7 @@ h2 {
   background: #fff;
   font-size: 11px;
   font-weight: 650;
+  white-space: nowrap;
 }
 .expense-delete-button {
   border-color: #f2d9d4;
@@ -1724,6 +1725,7 @@ h2 {
 }
 .ledger-card {
   display: flex;
+  flex-wrap: wrap;
   width: 100%;
   min-height: 72px;
   align-items: center;
@@ -1750,13 +1752,14 @@ h2 {
   background: transparent;
   text-align: left;
 }
-.ledger-delete-action {
+.ledger-card-actions {
   display: flex;
   flex: none;
   align-items: center;
   border-left: 1px solid var(--line);
   padding-left: 9px;
 }
+.ledger-edit-button,
 .ledger-delete-button {
   display: grid;
   min-width: 43px;
@@ -1772,11 +1775,54 @@ h2 {
   font-size: 9px;
   font-weight: 650;
 }
+.ledger-edit-button {
+  color: var(--green);
+}
+.ledger-edit-button:not(:disabled):active {
+  background: var(--green-soft);
+}
 .ledger-delete-button:disabled {
   opacity: 0.55;
 }
 .ledger-delete-button:not(:disabled):active {
   background: #fff0ed;
+}
+.ledger-rename-form {
+  display: grid;
+  flex-basis: 100%;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.ledger-rename-form label {
+  color: #60675e;
+  font-size: 11px;
+  font-weight: 650;
+}
+.ledger-rename-form input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid #e8ece5;
+  border-radius: 11px;
+  outline: none;
+  background: #fbfcfa;
+  font: inherit;
+  font-size: 12px;
+}
+.ledger-rename-form input:focus {
+  border-color: #80aa91;
+  box-shadow: 0 0 0 3px rgb(39 102 75 / 9%);
+}
+.ledger-rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.ledger-rename-actions button {
+  min-height: 38px;
+  border-radius: 10px;
+  font-size: 10px;
 }
 .ledger-card-copy {
   min-width: 0;

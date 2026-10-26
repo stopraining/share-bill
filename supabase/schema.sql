@@ -212,6 +212,31 @@ begin
 end;
 $$;
 
+create or replace function public.rename_ledger(p_ledger_id uuid, p_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null then
+    raise exception '請先登入後修改帳本名稱。';
+  end if;
+  if char_length(trim(coalesce(p_name, ''))) not between 1 and 80 then
+    raise exception '帳本名稱需為 1 到 80 個字。';
+  end if;
+
+  update public.ledgers
+  set name = trim(p_name), updated_at = now()
+  where id = p_ledger_id and owner_id = auth.uid();
+
+  if not found then
+    raise exception '找不到帳本，或只有帳本擁有者可以修改名稱。';
+  end if;
+  return p_ledger_id;
+end;
+$$;
+
 create or replace function public.create_ledger_invitation(p_ledger_id uuid, p_email text)
 returns uuid
 language plpgsql
@@ -329,9 +354,11 @@ grant execute on function public.list_ledger_members(uuid) to authenticated;
 revoke all on function public.create_ledger_invitation(uuid, text) from public, anon;
 revoke all on function public.accept_ledger_invitation(uuid) from public, anon;
 revoke all on function public.create_ledger(text, text, text) from public, anon;
+revoke all on function public.rename_ledger(uuid, text) from public, anon;
 grant execute on function public.create_ledger_invitation(uuid, text) to authenticated;
 grant execute on function public.accept_ledger_invitation(uuid) to authenticated;
 grant execute on function public.create_ledger(text, text, text) to authenticated;
+grant execute on function public.rename_ledger(uuid, text) to authenticated;
 
 -- Expense schema is ledger-scoped so separate groups never share bill records.
 create table if not exists public.expenses (

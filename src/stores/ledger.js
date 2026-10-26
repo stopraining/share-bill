@@ -60,6 +60,22 @@ export const useLedgerStore = defineStore("ledgers", () => {
     return ledger;
   }
 
+  async function renameLedger(ledgerId, name) {
+    if (!supabase) throw new Error("尚未連線 Supabase。");
+    const normalizedName = String(name || "").trim();
+    if (!normalizedName) throw new Error("帳本名稱不可空白。");
+
+    const { data, error } = await supabase.rpc("rename_ledger", {
+      p_ledger_id: ledgerId,
+      p_name: normalizedName,
+    });
+    if (error) throw error;
+    const ledger = ledgers.value.find((item) => item.id === ledgerId);
+    if (!ledger) throw new Error("找不到帳本，請重新整理後再試。");
+    ledger.name = normalizedName;
+    return data;
+  }
+
   async function acceptInvitation(token) {
     if (!supabase) throw new Error("尚未連線 Supabase。");
     const { data, error } = await supabase.rpc("accept_ledger_invitation", {
@@ -114,6 +130,7 @@ export const useLedgerStore = defineStore("ledgers", () => {
     fetchLedgers,
     setActiveLedger,
     createLedger,
+    renameLedger,
     acceptInvitation,
     inviteMember,
     deleteLedger,
