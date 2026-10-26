@@ -138,11 +138,19 @@ const shareTransfers = computed(() =>
 const shareText = computed(() => {
   // const ledgerName = ledgerStore.activeLedger?.name || "帳本結算";
   const lines = ["記帳："];
+  const advances = shareExpenses.value.filter(
+    (expense) =>
+      expense.payerUserId &&
+      expense.splits?.length &&
+      !expense.splits.some((split) => split.userId === expense.payerUserId),
+  );
+  const advanceIds = new Set(advances.map((expense) => expense.id));
   const expenseGroups = new Map(
     members.value.map((member) => [member.user_id, []]),
   );
 
   for (const expense of shareExpenses.value) {
+    if (advanceIds.has(expense.id)) continue;
     if (!expenseGroups.has(expense.payerUserId)) {
       expenseGroups.set(expense.payerUserId, []);
     }
@@ -159,12 +167,6 @@ const shareText = computed(() => {
     }
   }
 
-  const advances = shareExpenses.value.filter(
-    (expense) =>
-      expense.payerUserId &&
-      expense.splits?.length &&
-      !expense.splits.some((split) => split.userId === expense.payerUserId),
-  );
   if (advances.length) {
     lines.push("", "代墊：");
     for (const expense of advances) {
@@ -178,8 +180,9 @@ const shareText = computed(() => {
   }
 
   const average = members.value.length
-    ? shareExpenses.value.reduce((sum, expense) => sum + expense.amount, 0) /
-      members.value.length
+    ? shareExpenses.value
+        .filter((expense) => !advanceIds.has(expense.id))
+        .reduce((sum, expense) => sum + expense.amount, 0) / members.value.length
     : 0;
   lines.push("", `平均一人 ${currency.value.format(average)}`, "");
 

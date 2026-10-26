@@ -1137,6 +1137,51 @@ h2 {
   -webkit-overflow-scrolling: touch;
   scrollbar-gutter: stable;
 }
+.expense-search {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 6px;
+  padding: 0 12px;
+  border: 1px solid #e8ece5;
+  border-radius: 13px;
+  color: var(--muted);
+  background: #fff;
+}
+.expense-search:focus-within {
+  border-color: #80aa91;
+  box-shadow: 0 0 0 3px rgb(39 102 75 / 9%);
+}
+.expense-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+}
+.expense-search input::placeholder {
+  color: #92988f;
+}
+.expense-search button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #70776d;
+  background: #f2f4f0;
+}
+.expense-search-hint {
+  margin: 0 2px 12px;
+  color: var(--muted);
+  font-size: 10px;
+}
 .settlement-expense {
   overflow: hidden;
   border: 1px solid var(--line);

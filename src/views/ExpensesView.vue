@@ -5,6 +5,7 @@ import {
   Check,
   Pencil,
   ReceiptText,
+  Search,
   Trash2,
   UsersRound,
   X,
@@ -28,6 +29,10 @@ const editError = ref("");
 const editSuccess = ref("");
 const isSavingEdit = ref(false);
 const deletingExpenseId = ref("");
+const searchQuery = ref("");
+const searchResults = ref(null);
+const expenseSearchLoading = ref(false);
+const expenseSearchError = ref("");
 const editForm = ref({
   title: "",
   amount: "",
@@ -38,8 +43,12 @@ const editForm = ref({
   notes: "",
 });
 let requestId = 0;
+let expenseSearchRequestId = 0;
 
 const expenses = computed(() => expenseStore.recentExpenses);
+const displayedExpenses = computed(() =>
+  searchQuery.value.trim() ? searchResults.value || [] : expenses.value,
+);
 const incompleteCount = computed(
   () => expenses.value.filter((expense) => !expense.splits?.length).length,
 );
@@ -146,6 +155,7 @@ async function saveEdit() {
     );
     editSuccess.value = `「${updatedExpense.title}」已更新。`;
     editingExpenseId.value = "";
+    refreshExpenseSearch();
   } catch (error) {
     editError.value = getErrorMessage(error);
   } finally {
@@ -163,11 +173,35 @@ async function deleteExpense(expense) {
   try {
     await expenseStore.deleteExpense(expense.id);
     if (editingExpenseId.value === expense.id) editingExpenseId.value = "";
+    refreshExpenseSearch();
   } catch (error) {
     editError.value = getErrorMessage(error);
   } finally {
     deletingExpenseId.value = "";
   }
+}
+
+function refreshExpenseSearch() {
+  const query = searchQuery.value.trim();
+  if (!query) return;
+  const currentRequest = ++expenseSearchRequestId;
+  expenseSearchLoading.value = true;
+  expenseSearchError.value = "";
+  expenseStore
+    .searchExpensesByTitle(query)
+    .then((results) => {
+      if (currentRequest === expenseSearchRequestId)
+        searchResults.value = results;
+    })
+    .catch((error) => {
+      if (currentRequest === expenseSearchRequestId)
+        expenseSearchError.value =
+          error.message || "搜尋支出失敗，請稍後再試。";
+    })
+    .finally(() => {
+      if (currentRequest === expenseSearchRequestId)
+        expenseSearchLoading.value = false;
+    });
 }
 
 async function loadExpensesAndMembers() {
@@ -225,7 +259,44 @@ async function loadExpensesAndMembers() {
   }
 }
 
-watch(() => ledgerStore.activeLedgerId, loadExpensesAndMembers);
+watch(searchQuery, (query, _previousQuery, onCleanup) => {
+  const normalizedQuery = query.trim();
+  const currentRequest = ++expenseSearchRequestId;
+  expenseSearchError.value = "";
+  if (!normalizedQuery) {
+    searchResults.value = null;
+    expenseSearchLoading.value = false;
+    return;
+  }
+
+  searchResults.value = [];
+  expenseSearchLoading.value = true;
+  const timer = setTimeout(async () => {
+    try {
+      const results = await expenseStore.searchExpensesByTitle(normalizedQuery);
+      if (currentRequest === expenseSearchRequestId)
+        searchResults.value = results;
+    } catch (error) {
+      if (currentRequest === expenseSearchRequestId)
+        expenseSearchError.value =
+          error.message || "搜尋支出失敗，請稍後再試。";
+    } finally {
+      if (currentRequest === expenseSearchRequestId)
+        expenseSearchLoading.value = false;
+    }
+  }, 250);
+  onCleanup(() => clearTimeout(timer));
+});
+watch(
+  () => ledgerStore.activeLedgerId,
+  () => {
+    searchQuery.value = "";
+    searchResults.value = null;
+    expenseSearchError.value = "";
+    expenseSearchRequestId += 1;
+    loadExpensesAndMembers();
+  },
+);
 watch(
   [
     () => authStore.user?.user_metadata?.display_name,
@@ -275,20 +346,56 @@ onMounted(loadExpensesAndMembers);
 
     <div class="section-row expense-page-heading">
       <h2>全部支出</h2>
-      <span class="settlement-count">{{ expenses.length }} 筆</span>
+      <span class="settlement-count">{{ displayedExpenses.length }} 筆</span>
     </div>
+
+    <label class="expense-search" for="expense-search-input">
+      <Search :size="17" aria-hidden="true" />
+      <input
+        id="expense-search-input"
+        v-model="searchQuery"
+        autocomplete="off"
+        placeholder="搜尋支出名稱"
+        type="text"
+      />
+      <button
+        v-if="searchQuery"
+        type="button"
+        aria-label="清除搜尋"
+        @click="searchQuery = ''"
+      >
+        <X :size="16" />
+      </button>
+    </label>
+    <p class="expense-search-hint">輸入關鍵字搜尋此帳本的全部支出名稱</p>
+    <p v-if="expenseSearchError" class="expense-error" role="alert">
+      {{ expenseSearchError }}
+    </p>
 
     <div v-if="expenseStore.isLoading" class="member-state" role="status">
       正在載入費用紀錄…
     </div>
-    <div v-else-if="!expenses.length" class="empty-state settlement-empty">
+    <div v-else-if="expenseSearchLoading" class="member-state" role="status">
+      正在搜尋支出…
+    </div>
+    <div
+      v-else-if="!displayedExpenses.length && !searchQuery.trim()"
+      class="empty-state settlement-empty"
+    >
       <ReceiptText :size="25" />
       <p>這本帳本還沒有費用紀錄。</p>
       <RouterLink class="section-link" to="/expenses/new">新增費用</RouterLink>
     </div>
+    <div
+      v-else-if="!displayedExpenses.length"
+      class="empty-state settlement-empty"
+    >
+      <Search :size="25" />
+      <p>找不到符合「{{ searchQuery.trim() }}」的支出。</p>
+    </div>
     <div v-else class="settlement-expense-list">
       <details
-        v-for="expense in expenses"
+        v-for="expense in displayedExpenses"
         :key="expense.id"
         class="settlement-expense"
       >

@@ -4,8 +4,30 @@ import { supabase } from "../lib/supabase";
 import { useAuthStore } from "./auth";
 
 const LEGACY_STORAGE_KEY = "share-bill-expenses";
+const EXPENSE_SELECT =
+  "id, ledger_id, title, amount, paid_by, payer_name, created_by, category, expense_date, notes, created_at, expense_splits(user_id, amount)";
 const storageKey = (ledgerId) => `share-bill-expenses:${ledgerId}`;
 const migrationKey = (ledgerId) => `share-bill-expenses-migrated:${ledgerId}`;
+
+function mapExpenseRow(row) {
+  return {
+    id: row.id,
+    ledgerId: row.ledger_id,
+    title: row.title,
+    amount: Number(row.amount),
+    payerUserId: row.paid_by,
+    payer: row.payer_name || "帳本成員",
+    createdBy: row.created_by,
+    category: row.category,
+    createdAt: row.created_at,
+    expenseDate: row.expense_date,
+    notes: row.notes || "",
+    splits: (row.expense_splits || []).map((split) => ({
+      userId: split.user_id,
+      amount: Number(split.amount),
+    })),
+  };
+}
 
 function loadCachedExpenses(ledgerId) {
   if (!ledgerId) return [];
@@ -66,32 +88,14 @@ export const useExpenseStore = defineStore("expenses", () => {
       await migrateLegacyExpenses(targetLedgerId);
       const { data, error } = await supabase
         .from("expenses")
-        .select(
-          "id, ledger_id, title, amount, paid_by, payer_name, created_by, category, expense_date, notes, created_at, expense_splits(user_id, amount)",
-        )
+        .select(EXPENSE_SELECT)
         .eq("ledger_id", targetLedgerId)
         .order("expense_date", { ascending: false })
         .order("created_at", { ascending: false });
       if (error) throw error;
       if (ledgerId.value !== targetLedgerId) return;
 
-      expenses.value = (data || []).map((row) => ({
-        id: row.id,
-        ledgerId: row.ledger_id,
-        title: row.title,
-        amount: Number(row.amount),
-        payerUserId: row.paid_by,
-        payer: row.payer_name || "帳本成員",
-        createdBy: row.created_by,
-        category: row.category,
-        createdAt: row.created_at,
-        expenseDate: row.expense_date,
-        notes: row.notes || "",
-        splits: (row.expense_splits || []).map((split) => ({
-          userId: split.user_id,
-          amount: Number(split.amount),
-        })),
-      }));
+      expenses.value = (data || []).map(mapExpenseRow);
       persistCache();
       loadedLedgerId.value = targetLedgerId;
     } catch (err) {
@@ -335,6 +339,43 @@ export const useExpenseStore = defineStore("expenses", () => {
     persistCache();
   }
 
+  async function searchExpensesByTitle(searchTerm) {
+    const targetLedgerId = ledgerId.value;
+    const normalizedTerm = String(searchTerm || "").trim();
+    if (!normalizedTerm || !targetLedgerId) return [];
+
+    if (!supabase) {
+      const localTerm = normalizedTerm.toLocaleLowerCase();
+      return recentExpenses.value.filter((expense) =>
+        expense.title.toLocaleLowerCase().includes(localTerm),
+      );
+    }
+
+    const escapedTerm = normalizedTerm.replace(/[\\%_]/g, "\\$&");
+    const pageSize = 1000;
+    const rows = [];
+    let offset = 0;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from("expenses")
+        .select(EXPENSE_SELECT)
+        .eq("ledger_id", targetLedgerId)
+        .ilike("title", `%${escapedTerm}%`)
+        .order("expense_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      rows.push(...(data || []));
+      hasMore = (data || []).length === pageSize;
+      offset += pageSize;
+    }
+
+    if (ledgerId.value !== targetLedgerId) return [];
+    return rows.map(mapExpenseRow);
+  }
+
   return {
     expenses,
     ledgerId,
@@ -349,5 +390,6 @@ export const useExpenseStore = defineStore("expenses", () => {
     addExpense,
     updateExpense,
     deleteExpense,
+    searchExpensesByTitle,
   };
 });
