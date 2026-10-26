@@ -864,6 +864,22 @@ h2 {
   display: grid;
   gap: 10px;
 }
+.cancel-settlement-button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #e6b7ae;
+  border-radius: 12px;
+  color: #a33e32;
+  background: #fff8f6;
+  font-size: 11px;
+  font-weight: 700;
+}
+.cancel-settlement-button:disabled {
+  opacity: 0.6;
+}
 .active-settlement-heading {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);

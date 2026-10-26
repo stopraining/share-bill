@@ -12,6 +12,7 @@ import {
   Share2,
   Send,
   UsersRound,
+  X,
 } from "lucide-vue-next";
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
@@ -33,6 +34,7 @@ const accountedExpenseIds = ref(new Set());
 const settlementError = ref("");
 const shareActionMessage = ref("");
 const isStartingSettlement = ref(false);
+const isCancelingSettlement = ref(false);
 const updatingTransferId = ref("");
 let dataRequestId = 0;
 
@@ -103,6 +105,9 @@ const activeTransfers = computed(() =>
   settlementTransfers.value.filter(
     (transfer) => transfer.settlement_id === activeSettlement.value?.id,
   ),
+);
+const canCancelSettlement = computed(() =>
+  activeTransfers.value.every((transfer) => transfer.status === "pending"),
 );
 const shareExpenses = computed(() => {
   if (!activeSettlement.value) return candidateExpenses.value;
@@ -357,6 +362,33 @@ async function startSettlement() {
     settlementError.value = error.message || "無法開始結算。";
   } finally {
     isStartingSettlement.value = false;
+  }
+}
+
+async function cancelSettlement() {
+  if (
+    !activeSettlement.value ||
+    isCancelingSettlement.value ||
+    updatingTransferId.value
+  )
+    return;
+  const confirmed = window.confirm(
+    "確定要取消本輪結算嗎？取消後本輪費用會回到待結算清單，且只有尚未有人標記匯款的結算可以取消。",
+  );
+  if (!confirmed) return;
+
+  isCancelingSettlement.value = true;
+  settlementError.value = "";
+  try {
+    const { error } = await supabase.rpc("cancel_ledger_settlement", {
+      p_settlement_id: activeSettlement.value.id,
+    });
+    if (error) throw error;
+    await loadLedgerData();
+  } catch (error) {
+    settlementError.value = error.message || "無法取消本輪結算。";
+  } finally {
+    isCancelingSettlement.value = false;
   }
 }
 
@@ -617,7 +649,9 @@ onMounted(loadLedgerData);
                 transfer.payer_id === authStore.user?.id
               "
               class="transfer-action-button"
-              :disabled="updatingTransferId === transfer.id"
+              :disabled="
+                updatingTransferId === transfer.id || isCancelingSettlement
+              "
               type="button"
               @click="runTransferAction(transfer, 'paid')"
             >
@@ -631,7 +665,9 @@ onMounted(loadLedgerData);
                 transfer.payee_id === authStore.user?.id
               "
               class="transfer-action-button"
-              :disabled="updatingTransferId === transfer.id"
+              :disabled="
+                updatingTransferId === transfer.id || isCancelingSettlement
+              "
               type="button"
               @click="runTransferAction(transfer, 'confirmed')"
             >
@@ -657,6 +693,20 @@ onMounted(loadLedgerData);
         <p class="settlement-history-note">
           每筆轉帳由付款人標記已匯款，再由收款人確認。全部確認後，本輪會自動結束。
         </p>
+        <p v-if="!canCancelSettlement" class="settlement-history-note">
+          已有轉帳標記匯款，本輪無法取消，以保障帳目正確。
+        </p>
+        <button
+          v-if="canCancelSettlement"
+          class="cancel-settlement-button"
+          :disabled="isCancelingSettlement || Boolean(updatingTransferId)"
+          type="button"
+          @click="cancelSettlement"
+        >
+          <X :size="16" />{{
+            isCancelingSettlement ? "正在取消結算…" : "取消本輪結算"
+          }}
+        </button>
       </div>
       <div
         v-else-if="!candidateExpenses.length"

@@ -219,12 +219,60 @@ begin
 end;
 $$;
 
+create or replace function public.cancel_ledger_settlement(p_settlement_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_ledger_id uuid;
+  v_status text;
+begin
+  if auth.uid() is null then
+    raise exception '請先登入後取消結算。';
+  end if;
+
+  select s.ledger_id, s.status
+  into v_ledger_id, v_status
+  from public.settlements s
+  where s.id = p_settlement_id
+    and public.is_ledger_member(s.ledger_id, auth.uid())
+  for update;
+
+  if not found then
+    raise exception '找不到結算，或您不是此帳本的成員。';
+  end if;
+  if v_status <> 'active' then
+    raise exception '只有進行中的結算可以取消。';
+  end if;
+
+  -- Serialize with transfer updates and preserve any batch where money may have moved.
+  perform t.id
+  from public.settlement_transfers t
+  where t.settlement_id = p_settlement_id
+  for update;
+
+  if exists (
+    select 1 from public.settlement_transfers t
+    where t.settlement_id = p_settlement_id and t.status <> 'pending'
+  ) then
+    raise exception '已有轉帳標記為匯款或確認收款，為保障帳目不能取消。';
+  end if;
+
+  delete from public.settlements where id = p_settlement_id;
+  return p_settlement_id;
+end;
+$$;
+
 revoke all on function public.start_ledger_settlement(uuid) from public, anon;
 revoke all on function public.mark_settlement_transfer_paid(uuid) from public, anon;
 revoke all on function public.confirm_settlement_transfer_received(uuid) from public, anon;
+revoke all on function public.cancel_ledger_settlement(uuid) from public, anon;
 grant execute on function public.start_ledger_settlement(uuid) to authenticated;
 grant execute on function public.mark_settlement_transfer_paid(uuid) to authenticated;
 grant execute on function public.confirm_settlement_transfer_received(uuid) to authenticated;
+grant execute on function public.cancel_ledger_settlement(uuid) to authenticated;
 
 -- Once captured in a settlement, expense rows remain immutable for audit history.
 create or replace function public.expense_is_unsettled(p_expense_id uuid)

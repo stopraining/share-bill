@@ -10,6 +10,8 @@
 
 若要啟用結算批次、匯款/收款確認及歷史紀錄，請在帳本、成員、費用和分攤資料表 migration 都已執行後，再執行 `settlements_migration.sql`。開始結算時，系統會將所有尚未進入前一輪的已分攤費用封存至一個批次，並建立精簡轉帳建議。付款人標記已匯款後，由收款人確認；所有轉帳確認後批次自動完成。批次內的費用列會由 trigger 保護，不能再編輯或刪除，以免破壞歷史；若需修正，請新增一筆調整費用，納入下一輪。
 
+若結算功能已部署，欲啟用「取消本輪結算」，請重新執行 `settlements_migration.sql` 以新增取消 RPC。只有仍在進行中、且沒有任何轉帳標記為已匯款或已確認的批次可以取消；取消會解除本輪費用封存並刪除該批次的轉帳記錄。
+
 若已部署結算功能，並要允許擁有者刪除整本帳本（包括其支出和結算歷史），請執行 `ledger_delete_migration.sql`。它會將 `settlement_expenses.expense_id` 外鍵改為 `ON DELETE CASCADE`，並允許刪除帳本時清除該帳本的歷史費用；單獨編輯或刪除已結算支出的保護仍會保留。
 
 若未結算費用按「儲存變更」後仍未更新，請執行 `fix_expense_edit_trigger.sql`。舊版 `prevent_settled_expense_mutation` BEFORE UPDATE trigger 錯誤地回傳 `OLD`，會讓 PostgreSQL 靜默丟棄所有費用變更；修正後未結算費用回傳 `NEW`，已結算費用仍拒絕單筆修改或刪除。
