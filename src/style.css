@@ -760,6 +760,85 @@ h2 {
   font-size: 11px;
   line-height: 1.45;
 }
+.personal-expenses-section {
+  margin-bottom: 24px;
+}
+.personal-expenses-section .settlement-section-row {
+  margin-top: 27px;
+}
+.personal-expenses-summary {
+  cursor: pointer;
+  list-style: none;
+}
+.personal-expenses-summary::-webkit-details-marker {
+  display: none;
+}
+.personal-expenses-summary-label {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.personal-expenses-summary-label strong {
+  font-size: 1rem;
+}
+.personal-expenses-summary-label small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.personal-expenses-summary-total {
+  margin-left: auto;
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.personal-expenses-chevron {
+  flex: none;
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+.personal-expenses-disclosure[open] .personal-expenses-chevron {
+  transform: rotate(180deg);
+}
+.personal-expenses-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+.personal-expenses-note,
+.personal-expenses-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.personal-expense-row,
+.personal-expenses-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.personal-expense-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.personal-expense-row strong,
+.personal-expenses-total strong:last-child {
+  flex: none;
+  white-space: nowrap;
+}
+.personal-expenses-total {
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.personal-expenses-total strong:last-child {
+  color: var(--green);
+}
 .settlement-section-row {
   margin-top: 27px;
 }
@@ -1293,7 +1372,6 @@ h2 {
   background: #fff;
   font-size: 11px;
   font-weight: 650;
-  white-space: nowrap;
 }
 .expense-delete-button {
   border-color: #f2d9d4;
@@ -1823,6 +1901,7 @@ h2 {
   min-height: 38px;
   border-radius: 10px;
   font-size: 10px;
+  white-space: nowrap;
 }
 .ledger-card-copy {
   min-width: 0;

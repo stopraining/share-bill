@@ -1,6 +1,7 @@
 <script setup>
 import {
   ArrowRight,
+  ChevronDown,
   CircleDollarSign,
   Clock3,
   Check,
@@ -120,6 +121,29 @@ const shareExpenses = computed(() => {
     currentBatchExpenseIds.has(expense.id),
   );
 });
+const personalExpenseItems = computed(() => {
+  const userId = authStore.user?.id;
+  if (!userId) return [];
+
+  return shareExpenses.value.flatMap((expense) => {
+    const split = expense.splits?.find((item) => item.userId === userId);
+    if (!split) return [];
+
+    return [
+      {
+        id: expense.id,
+        title: expense.title,
+        amountCents: Math.round(Number(split.amount) * 100),
+      },
+    ];
+  });
+});
+const personalExpenseTotalCents = computed(() =>
+  personalExpenseItems.value.reduce(
+    (total, item) => total + item.amountCents,
+    0,
+  ),
+);
 const shareTransfers = computed(() =>
   activeSettlement.value
     ? activeTransfers.value.map((transfer) => ({
@@ -182,7 +206,8 @@ const shareText = computed(() => {
   const average = members.value.length
     ? shareExpenses.value
         .filter((expense) => !advanceIds.has(expense.id))
-        .reduce((sum, expense) => sum + expense.amount, 0) / members.value.length
+        .reduce((sum, expense) => sum + expense.amount, 0) /
+      members.value.length
     : 0;
   lines.push("", `平均一人 ${currency.value.format(average)}`, "");
 
@@ -563,6 +588,51 @@ onMounted(loadLedgerData);
       {{ shareActionMessage }}
     </p>
 
+    <section
+      v-if="authStore.user?.id && !activeSettlement && candidateExpenses.length"
+      class="personal-expenses-section"
+    >
+      <details class="personal-expenses-disclosure">
+        <summary
+          class="section-row settlement-section-row personal-expenses-summary"
+        >
+          <span class="personal-expenses-summary-label">
+            <strong>個人花費預覽</strong>
+            <small>{{ memberName(authStore.user.id) }}</small>
+          </span>
+          <span class="personal-expenses-summary-total">{{
+            currency.format(personalExpenseTotalCents / 100)
+          }}</span>
+          <ChevronDown :size="18" class="personal-expenses-chevron" />
+        </summary>
+        <div class="content-card personal-expenses-card">
+          <p class="personal-expenses-note">
+            依你在各筆費用中的分攤金額計算，包含他人代墊的費用。
+          </p>
+          <div
+            v-for="item in personalExpenseItems"
+            :key="item.id"
+            class="personal-expense-row"
+          >
+            <span>{{ item.title }}</span>
+            <strong>{{ currency.format(item.amountCents / 100) }}</strong>
+          </div>
+          <p
+            v-if="!personalExpenseItems.length"
+            class="personal-expenses-empty"
+          >
+            目前沒有分攤給你的費用。
+          </p>
+          <div class="personal-expenses-total">
+            <strong>個人花費合計</strong>
+            <strong>{{
+              currency.format(personalExpenseTotalCents / 100)
+            }}</strong>
+          </div>
+        </div>
+      </details>
+    </section>
+
     <section>
       <div class="section-row settlement-section-row">
         <h2>{{ activeSettlement ? "本輪轉帳狀態" : "待結算預覽" }}</h2>
@@ -784,6 +854,51 @@ onMounted(loadLedgerData);
         {{ candidateExpenses.length }}
         筆費用會保留為固定快照；之後新增的費用會自動列入下一輪。
       </p>
+    </section>
+
+    <section
+      v-if="authStore.user?.id && activeSettlement"
+      class="personal-expenses-section"
+    >
+      <details class="personal-expenses-disclosure">
+        <summary
+          class="section-row settlement-section-row personal-expenses-summary"
+        >
+          <span class="personal-expenses-summary-label">
+            <strong>本輪個人記帳明細</strong>
+            <small>{{ memberName(authStore.user.id) }}</small>
+          </span>
+          <span class="personal-expenses-summary-total">{{
+            currency.format(personalExpenseTotalCents / 100)
+          }}</span>
+          <ChevronDown :size="18" class="personal-expenses-chevron" />
+        </summary>
+        <div class="content-card personal-expenses-card">
+          <p class="personal-expenses-note">
+            依你在各筆費用中的分攤金額計算，包含他人代墊的費用。
+          </p>
+          <div
+            v-for="item in personalExpenseItems"
+            :key="item.id"
+            class="personal-expense-row"
+          >
+            <span>{{ item.title }}</span>
+            <strong>{{ currency.format(item.amountCents / 100) }}</strong>
+          </div>
+          <p
+            v-if="!personalExpenseItems.length"
+            class="personal-expenses-empty"
+          >
+            目前沒有分攤給你的費用。
+          </p>
+          <div class="personal-expenses-total">
+            <strong>個人花費合計</strong>
+            <strong>{{
+              currency.format(personalExpenseTotalCents / 100)
+            }}</strong>
+          </div>
+        </div>
+      </details>
     </section>
 
     <section v-if="!activeSettlement">
